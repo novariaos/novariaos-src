@@ -29,7 +29,7 @@ targets:
       - "find . -iname '*.c' -exec dirname {} \\; | uniq | sed 's/\\.\\///g' | xargs printf -- '${OBJ_DIR}/%s\\n' | xargs mkdir -p"
 
   kernel.bin:
-    deps: [prepare, core/arch/boot.asm, core/kernel/kernel, core/kernel/nvm/caps, core/kernel/kstd, core/kernel/mem, 
+    deps: [prepare, core/arch/boot, core/kernel/kernel, core/kernel/nvm/caps, core/kernel/kstd, core/kernel/mem, 
         core/kernel/vge/fb, core/kernel/vge/fb_render, core/drivers/serial, core/drivers/timer, core/drivers/keyboard, 
         core/fs/ramfs, core/fs/initramfs, core/fs/vfs, core/fs/procfs, core/arch/cpuid, core/fs/iso9660, core/arch/entropy, 
         core/crypto/chacha20, core/crypto/chacha20_rng, core/drivers/cdrom, core/kernel/nvm/nvm, core/kernel/nvm/syscalls, 
@@ -40,10 +40,10 @@ targets:
       - "${LD} ${LDFLAGS} -o ${BUILD_DIR}/boot/${@} $(echo ${^} | xargs | cut -d ' ' -f2- | xargs printf -- '${OBJ_DIR}/%s.o\\n' | xargs)"
       - "cp -r ./limine/* ${BUILD_DIR}/boot"
 
-  core/arch/boot.asm:
+  core/arch/boot:
     deps: []
     cmds:
-      - "${ASM} ${ASMFLAGS} ${@} -o ${OBJ_DIR}/${@}.o"
+      - "${ASM} ${ASMFLAGS} ${@}.asm -o ${OBJ_DIR}/${@}.o"
 
   core/kernel/kernel:
     deps: []
