@@ -8,6 +8,7 @@ variables:
   ASMFLAGS: -f elf64
   LDFLAGS: -nostdlib -m elf_x86_64 -T link.ld -z noexecstack
   BUILD_DIR: build
+  OBJ_DIR: build/objects
   KERNEL_OUT: kernel.bin
   DATE: "$(date +%Y-%m-%d)"
 
@@ -22,172 +23,183 @@ targets:
     deps: [iso]
 
   kernel.bin:
-    deps: [kasm.o, kc.o, caps.o, kstd.o, mem.o, fb.o, fb_render.o, serial.o, timer.o, keyboard.o, ramfs.o, initramfs.o, vfs.o, procfs.o, cpuid.o, iso9660.o, entropy.o, chacha20.o, chacha20_rng.o, cdrom.o, nvm.o, syscalls.o, shell.o, psf.o, userspace.o, userspace_init.o, us_echo.o, us_clear.o, us_rm.o, us_write.o, us_nova.o, us_uname.o]
+    deps: [prepare, core/arch/boot, core/kernel/kernel, core/kernel/nvm/caps, core/kernel/kstd, core/kernel/mem, 
+        core/kernel/vge/fb, core/kernel/vge/fb_render, core/drivers/serial, core/drivers/timer, core/drivers/keyboard, 
+        core/fs/ramfs, core/fs/initramfs, core/fs/vfs, core/fs/procfs, core/arch/cpuid, core/fs/iso9660, core/arch/entropy, 
+        core/crypto/chacha20, core/crypto/chacha20_rng, core/drivers/cdrom, core/kernel/nvm/nvm, core/kernel/nvm/syscalls, 
+        core/kernel/shell, core/kernel/vge/psf, core/kernel/userspace, rootfs/usr/src/userspace_init, 
+        rootfs/usr/src/echo, rootfs/usr/src/clear, rootfs/usr/src/rm, rootfs/usr/src/write, rootfs/usr/src/nova, rootfs/usr/src/uname]
     cmds:
-      - "${LD} ${LDFLAGS} -o ${@} ${^}"
+      - "${LD} ${LDFLAGS} -o ${BUILD_DIR}/boot/${@} $(echo ${^} | xargs printf -- '${OBJ_DIR}/%s\\n' | xargs)"
       - "mkdir -p ${BUILD_DIR}"
-      - "mv ${@} ${BUILD_DIR}/boot"
+      - "cp ./limine ${BUILD_DIR}/boot"
       - "find . -name '*.o' -delete"
       - "find . -name 'build_*' -delete"
 
-  kasm.o:
+  prepare:
     deps: []
     cmds:
-      - "${ASM} ${ASMFLAGS} core/arch/boot.asm -o ${@}"
+      - "find . -iname '*.c' -exec dirname {} \\; | uniq | sed 's/\\.\\///g' | xargs printf -- '${OBJ_DIR}/%s\\n' | xargs mkdir -p"
 
-  kc.o:
+  core/arch/boot:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/kernel/kernel.c -o ${@}"
+      - "${ASM} ${ASMFLAGS} ${@}.asm -o ${OBJ_DIR}/${@}.asm.o"
 
-  kstd.o:
+  core/kernel/kernel:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/kernel/kstd.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  mem.o:
+  core/kernel/kstd:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/kernel/mem.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  nvm.o:
+  core/kernel/mem:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/kernel/nvm/nvm.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  syscalls.o:
+  core/kernel/nvm/nvm:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/kernel/nvm/syscalls.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  caps.o:
+  core/kernel/nvm/syscalls:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/kernel/nvm/caps.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  fb.o:
+  core/kernel/nvm/caps:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/kernel/vge/fb.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  fb_render.o:
+  core/kernel/vge/fb:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/kernel/vge/fb_render.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  psf.o:
+  core/kernel/vge/fb_render:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/kernel/vge/psf.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  timer.o:
+  core/kernel/vge/psf:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/drivers/timer.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  serial.o:
+  core/drivers/timer:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/drivers/serial.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  keyboard.o:
+  core/drivers/serial:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/drivers/keyboard.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  cdrom.o:
+  core/drivers/keyboard:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/drivers/cdrom.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  shell.o:
+  core/drivers/cdrom:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/kernel/shell.c -o ${@}"
-  ramfs.o:
-    deps: []
-    cmds:
-      - "${CC} ${CFLAGS} core/fs/ramfs.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  initramfs.o:
+  core/kernel/shell:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/fs/initramfs.c -o ${@}"
-
-  iso9660.o:
-    deps: []
-    cmds:
-      - "${CC} ${CFLAGS} core/fs/iso9660.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
       
-  vfs.o:
+  core/fs/ramfs:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/fs/vfs.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  procfs.o:
+  core/fs/initramfs:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/fs/procfs.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  cpuid.o:
+  core/fs/iso9660:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/arch/cpuid.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+      
+  core/fs/vfs:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  userspace.o:
+  core/fs/procfs:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/kernel/userspace.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  userspace_init.o:
+  core/arch/cpuid:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} rootfs/usr/src/userspace_init.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  us_echo.o:
+  core/kernel/userspace:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} rootfs/usr/src/echo.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  us_clear.o:
+  rootfs/usr/src/userspace_init:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} rootfs/usr/src/clear.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  us_rm.o:
+  rootfs/usr/src/echo:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} rootfs/usr/src/rm.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  us_write.o:
+  rootfs/usr/src/clear:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} rootfs/usr/src/write.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  us_nova.o:
+  rootfs/usr/src/rm:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} rootfs/usr/src/nova.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  us_uname.o:
+  rootfs/usr/src/write:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} rootfs/usr/src/uname.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  chacha20.o:
+  rootfs/usr/src/nova:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/crypto/chacha20.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  chacha20_rng.o:
+  rootfs/usr/src/uname:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/crypto/chacha20_rng.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  entropy.o:
+  core/crypto/chacha20:
     deps: []
     cmds:
-      - "${CC} ${CFLAGS} core/arch/entropy.c -o ${@}"
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
+  core/crypto/chacha20_rng:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
+  core/arch/entropy:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
   rebuild-initramfs:
     phony: true
