@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <core/kernel/nvm/nvm.h>
 
 #define CAPS_NONE             0x0000
 #define CAP_FS_READ           0x0001

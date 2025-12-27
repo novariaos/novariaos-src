@@ -6,6 +6,7 @@
 #include <core/drivers/serial.h>
 #include <core/kernel/nvm/nvm.h>
 #include <core/kernel/nvm/caps.h>
+#include <stdint.h>
 
 nvm_process_t processes[MAX_PROCESSES];
 uint8_t current_process = 0;
@@ -746,6 +747,10 @@ void nvm_scheduler_tick() {
     } else {
         current_process = original;
     }
+}
+
+nvm_process_t* nvm_get_process(uint8_t pid) {
+    return &processes[pid];
 }
 
 void nvm_execute(uint8_t* bytecode, uint32_t size, uint16_t* capabilities, uint8_t caps_count) {

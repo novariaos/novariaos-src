@@ -1,5 +1,5 @@
-#ifndef PAUSE_H
-#define PAUSE_H
+#ifndef ARCH_PAUSE_H
+#define ARCH_PAUSE_H
 
 #define cpu_relax() asm volatile("pause" ::: "memory")
 

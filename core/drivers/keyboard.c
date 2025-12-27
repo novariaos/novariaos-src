@@ -3,9 +3,8 @@
 #include <core/drivers/keyboard.h>
 #include <core/kernel/kstd.h>
 #include <core/kernel/vge/fb.h>
-
-extern uint8_t inb(uint16_t port);
-extern void outb(uint16_t port, uint8_t val);
+#include <core/arch/io.h>
+#include <core/kernel/nvm/nvm.h>
 
 // Keyboard data port and status port
 #define KEYBOARD_DATA_PORT    0x60
@@ -146,9 +145,7 @@ bool keyboard_has_char(void) {
 }
 
 // Read a character (blocking)
-char keyboard_getchar(void) {
-    extern void nvm_scheduler_tick(void);
-    
+char keyboard_getchar(void) {    
     while (!keyboard_has_char()) {
         keyboard_poll();
         // Run NVM scheduler while waiting for input

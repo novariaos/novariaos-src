@@ -1,3 +1,6 @@
+#ifndef ARCH_IDT_H
+#define ARCH_IDT_H
+
 #include <stdint.h>
 
 #define IDT_SIZE 256
@@ -10,4 +13,4 @@
 
 #define SYSCALL_INTERRUPT 0x80
 
-extern uint8_t inb(uint16_t port);
+#endif

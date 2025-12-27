@@ -42,5 +42,6 @@ int nvm_create_process_with_stack(uint8_t* bytecode, uint32_t size,  uint16_t in
 void nvm_scheduler_tick();
 bool nvm_is_process_active(uint8_t pid);
 int32_t nvm_get_exit_code(uint8_t pid);
+nvm_process_t* nvm_get_process(uint8_t pid);
 
 #endif

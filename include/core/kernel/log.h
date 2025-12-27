@@ -175,6 +175,8 @@ static inline void syslog_init(void) {
     vfs_create("/var/log/system.log", log_buffer, log_size);
 }
 
+void kprint(const char *str, int color);
+
 #define LOG_FATAL(...) do { if (LOG_LEVEL_FATAL <= CURRENT_LOG_LEVEL) log_format_basic("FATAL", __VA_ARGS__); } while(0)
 #define LOG_ERROR(...) do { if (LOG_LEVEL_ERROR <= CURRENT_LOG_LEVEL) log_format_basic("ERROR", __VA_ARGS__); } while(0)
 #define LOG_WARN(...)  do { if (LOG_LEVEL_WARN <= CURRENT_LOG_LEVEL)  log_format_basic("WARN", __VA_ARGS__); } while(0)

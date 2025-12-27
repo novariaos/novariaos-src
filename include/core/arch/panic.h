@@ -1,5 +1,5 @@
-#ifndef PANIC_H
-#define PANIC_H
+#ifndef ARCH_PANIC_H
+#define ARCH_PANIC_H
 
 inline static void panic(const char* message) {
     asm volatile ("cli");
@@ -12,4 +12,4 @@ inline static void panic(const char* message) {
     }
 }
 
-#endif // PANIC_H
+#endif // ARCH_PANIC_H

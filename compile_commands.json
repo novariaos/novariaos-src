@@ -1,0 +1,23 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-I./include/",
+      "-I./",
+      "-fno-stack-protector",
+      "-m64",
+      "-mcmodel=large",
+      "-mno-red-zone",
+      "-mno-mmx",
+      "-mno-sse",
+      "-mno-sse2",
+      "-c",
+      "-o",
+      "timer.o",
+      "core/drivers/timer.c"
+    ],
+    "directory": "/home/notyourfox/zennix-issues/novariaos-src",
+    "file": "/home/notyourfox/zennix-issues/novariaos-src/core/drivers/timer.c",
+    "output": "/home/notyourfox/zennix-issues/novariaos-src/timer.o"
+  }
+]

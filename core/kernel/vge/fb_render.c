@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
+#include <core/kernel/log.h>
 #include <core/kernel/vge/fb_render.h>
 #include <lib/bootloader/limine.h>
 #include <stdint.h>

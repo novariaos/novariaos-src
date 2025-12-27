@@ -9,9 +9,7 @@
 #include <core/kernel/log.h>
 #include <core/kernel/mem.h>
 #include <core/fs/vfs.h>
-
-extern uint8_t inb(uint16_t port);
-extern void outb(uint16_t port, uint8_t val);
+#include <core/arch/io.h>
 
 uint16_t recipient;
 uint16_t port;
@@ -210,7 +208,7 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
                                                       (uint16_t[]){CAPS_NONE}, 1,
                                                       initial_stack, stack_pos);
             kfree(initial_stack);
-            caps_copy(proc->pid, new_pid);
+            caps_copy(nvm_get_process(proc->pid), nvm_get_process(new_pid));
 
             if (new_pid < 0) {
                 LOG_WARN("Process %d: Failed to create new process\n", proc->pid);
