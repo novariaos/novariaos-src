@@ -3,5 +3,5 @@ VERSION="0.0.8-INDEV"
 ID=novariaos
 ANSI_COLOR="0;33"
 PRETTY_NAME="NovariaOS 0.0.8-INDEV"
-HOME_URL="https://z3nnix.github.io/NovariaOS"
-BUG_REPORT_URL="https://github.com/z3nnix/NovariaOS/issues"
+HOME_URL="https://novariaos.github.io"
+BUG_REPORT_URL="https://github.com/novariaos/novariaos-src/issues"

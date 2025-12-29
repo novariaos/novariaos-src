@@ -19,7 +19,6 @@
 #define VFS_SEEK_CUR 1
 #define VFS_SEEK_END 2
 
-
 #define DEV_NULL_FD   1000
 #define DEV_ZERO_FD   1001
 #define DEV_FULL_FD   1002
@@ -95,5 +94,12 @@ int vfs_count(void);
 vfs_file_t* vfs_get_files(void);
 void vfs_list_dir(const char* dirname);
 void vfs_list(void);
+int vfs_pseudo_register_with_fd(const char* filename, int fixed_fd,
+                            vfs_dev_read_t read_fn,
+                            vfs_dev_write_t write_fn,
+                            vfs_dev_seek_t seek_fn,
+                            vfs_dev_ioctl_t ioctl_fn,
+                            void* dev_data);
+void vfs_link_std_fd(int std_fd, const char* dev_name);
 
 #endif

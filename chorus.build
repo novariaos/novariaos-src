@@ -31,7 +31,7 @@ targets:
   kernel.bin:
     deps: [prepare, core/arch/boot, core/kernel/kernel, core/kernel/nvm/caps, core/kernel/kstd, core/kernel/mem, 
         core/kernel/vge/fb, core/kernel/vge/fb_render, core/drivers/serial, core/drivers/timer, core/drivers/keyboard, 
-        core/fs/ramfs, core/fs/initramfs, core/fs/vfs, core/fs/procfs, core/arch/cpuid, core/fs/iso9660, core/arch/entropy, 
+        core/fs/ramfs, core/fs/initramfs, core/fs/vfs, core/fs/procfs, core/arch/cpuid, core/fs/iso9660, core/fs/devfs, core/arch/entropy, 
         core/crypto/chacha20, core/crypto/chacha20_rng, core/drivers/cdrom, core/kernel/nvm/nvm, core/kernel/nvm/syscalls, 
         core/kernel/shell, core/kernel/vge/psf, core/kernel/userspace, rootfs/usr/src/userspace_init, 
         rootfs/usr/src/echo, rootfs/usr/src/clear, rootfs/usr/src/rm, rootfs/usr/src/write, rootfs/usr/src/nova, rootfs/usr/src/uname]
@@ -140,6 +140,11 @@ targets:
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
+  core/fs/devfs:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
   core/arch/cpuid:
     deps: []
     cmds:
@@ -228,7 +233,7 @@ targets:
         fi
       - >
         sh -c 'mkdir -p rootfs/etc && echo
-        "NAME=${OS_NAME}\nVERSION=\"${OS_VERSION}\"\nID=${OS_ID}\nANSI_COLOR=\"${OS_COLOR}\"\nPRETTY_NAME=\"${OS_NAME} ${OS_VERSION}-RELEASE\"\nHOME_URL=\"https://z3nnix.github.io/NovariaOS\"\nBUG_REPORT_URL=\"https://github.com/z3nnix/NovariaOS/issues\"" 
+        "NAME=${OS_NAME}\nVERSION=\"${OS_VERSION}\"\nID=${OS_ID}\nANSI_COLOR=\"${OS_COLOR}\"\nPRETTY_NAME=\"${OS_NAME} ${OS_VERSION}-RELEASE\"\nHOME_URL=\"https://novariaos.github.io/\"\nBUG_REPORT_URL=\"https://github.com/novariaos/novariaos-src/issues\"" 
         > rootfs/etc/os-release'
       - "xorriso -as mkisofs -quiet -iso-level 3 -o ${BUILD_DIR}/boot/rootfs.img rootfs/"
       - "xorriso -as mkisofs -b limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table --protective-msdos-label -iso-level 3 -partition_offset 64 -quiet -o dist/${OS_NAME}-${OS_VERSION}-${OS_STAGE}-amd64-memstick.iso ${BUILD_DIR}/boot/"
