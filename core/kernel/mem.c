@@ -22,26 +22,6 @@ static volatile struct limine_hhdm_request hhdm_request = {
     .revision = 0
 };
 
-typedef struct MemoryBlock {
-    int32_t magic;
-    size_t size;
-    struct MemoryBlock* next;
-} MemoryBlock;
-
-#define MAGIC_ALLOC      0xABCD1234
-#define MAGIC_FREE       0xDCBA5678
-#define ALIGNMENT        8
-#define MIN_BLOCK_SIZE   (sizeof(MemoryBlock) + ALIGNMENT)
-
-static MemoryBlock* freeList = NULL;
-static void* poolStart = NULL;
-static size_t poolSizeTotal = 0;
-static uint64_t hhdmOffset = 0;
-
-static void mergeFreeBlocks();
-static bool validateBlock(MemoryBlock* block);
-static void* physicalToVirtual(uint64_t physical);
-static uint64_t virtualToPhysical(void* virtual);
 
 void formatMemorySize(size_t size, char* buffer) {
     const char* units[] = {"B", "KB", "MB", "GB"};

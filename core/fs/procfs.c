@@ -17,8 +17,8 @@ static vfs_ssize_t procfs_bytecode_read(vfs_file_t* file, void* buf, size_t coun
     nvm_process_t* process = (nvm_process_t*)file->dev_data;
     if (process == NULL) return -1;
     
-    static char bytecode_buf[8192];
-    static int bytecode_initialized = 0;
+    char bytecode_buf[8192];
+    int bytecode_initialized = 0;
     
     if (!bytecode_initialized) {
         char *ptr = bytecode_buf;
@@ -140,8 +140,8 @@ static vfs_ssize_t procfs_bytecode_read(vfs_file_t* file, void* buf, size_t coun
 }
 
 static vfs_ssize_t procfs_status_read(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos) {
-    static char status_buf[512];
-    static int status_initialized = 0;
+    char status_buf[512];
+    int status_initialized = 0;
     
     if (!status_initialized) {
         nvm_process_t* process = (nvm_process_t*)file->dev_data;
@@ -200,8 +200,8 @@ static vfs_ssize_t procfs_stack_read(vfs_file_t* file, void* buf, size_t count, 
     nvm_process_t* process = (nvm_process_t*)file->dev_data;
     if (process == NULL) return -1;
     
-    static char stack_buf[4096];
-    static int stack_initialized = 0;
+    char stack_buf[4096];
+    int stack_initialized = 0;
     
     if (!stack_initialized) {
         char *ptr = stack_buf;
@@ -336,18 +336,30 @@ vfs_ssize_t procfs_cpuinfo(vfs_file_t* file, void* buf, size_t count, vfs_off_t*
 }
 
 vfs_ssize_t procfs_meminfo(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos) {
-    static char meminfo_buf[512];
-    static int meminfo_initialized = 0;
+    char meminfo_buf[512];
+    int meminfo_initialized = 0;
 
     if (!meminfo_initialized) {
         size_t memTotal = getMemTotal();
         size_t memFree = getMemFree();
         size_t memUsed = memTotal - memFree;
 
-        char total_str[32], used_str[32], free_str[32];
+        size_t overhead = 0;
+        MemoryBlock* curr = freeList;
+        int freeBlocks = 0;
+        while (curr != NULL) {
+            if (curr->magic == MAGIC_FREE) {
+                freeBlocks++;
+                overhead += sizeof(MemoryBlock);
+            }
+            curr = curr->next;
+        }
+        
+        char total_str[32], used_str[32], free_str[32], ovh_str[32];
         formatMemorySize(memTotal, total_str);
         formatMemorySize(memUsed, used_str);
         formatMemorySize(memFree, free_str);
+        formatMemorySize(overhead, ovh_str);
 
         strcpy_safe(meminfo_buf, "MemTotal       : ", sizeof(meminfo_buf));
         strcat_safe(meminfo_buf, total_str, sizeof(meminfo_buf));
@@ -355,6 +367,12 @@ vfs_ssize_t procfs_meminfo(vfs_file_t* file, void* buf, size_t count, vfs_off_t*
         strcat_safe(meminfo_buf, used_str, sizeof(meminfo_buf));
         strcat_safe(meminfo_buf, "\nMemFree        : ", sizeof(meminfo_buf));
         strcat_safe(meminfo_buf, free_str, sizeof(meminfo_buf));
+        strcat_safe(meminfo_buf, "\nOverhead       : ", sizeof(meminfo_buf));
+        strcat_safe(meminfo_buf, ovh_str, sizeof(meminfo_buf));
+        strcat_safe(meminfo_buf, "\nFree blocks    : ", sizeof(meminfo_buf));
+        char blocks_str[16];
+        itoa(freeBlocks, blocks_str, 10);
+        strcat_safe(meminfo_buf, blocks_str, sizeof(meminfo_buf));
         strcat_safe(meminfo_buf, "\n", sizeof(meminfo_buf));
 
         meminfo_initialized = 1;
