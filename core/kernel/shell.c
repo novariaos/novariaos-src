@@ -18,107 +18,43 @@
 static char current_working_directory[MAX_PATH_LENGTH] = "/";
 
 static void cmd_help(void) {
-    kprint("\nBuilt-in commands:\n", 10);
+    kprint("Built-in commands:\n", 7);
     kprint("  help     - Show this help message\n", 7);
-    kprint("  memtest  - Test memory allocation\n", 7);
-    kprint("  list     - List loaded NVM programs\n", 7);
-    kprint("  progs    - List userspace programs\n", 7);
     kprint("  pwd      - Print working directory\n", 7);
     kprint("  ls       - List directory contents\n", 7);
     kprint("  cat      - Display file contents\n", 7);
-    kprint("\nISO9660 commands:\n", 10);
-    kprint("  isols    - List files in ISO9660 directory\n", 7);
-    kprint("  isocat   - Show ISO9660 file content\n", 7);
-    kprint("\nKeyboard shortcuts: (may unstable now)\n", 10);
-    kprint("  Ctrl+Up     - Scroll screen up\n", 7);
-    kprint("  Ctrl+Down   - Scroll screen down\n", 7);
-    kprint("\nUserspace programs:\n", 10);
-    kprint("  Use 'progs' to see available programs\n", 7);
-    kprint("\n", 7);
-}
-
-static void cmd_memtest(void) {
-    kprint("\nTesting memory allocation...\n", 7);
-    
-    void* ptr1 = allocateMemory(128);
-    if (ptr1) {
-        kprint("Allocated 128 bytes at ", 7);
-        char buf[32];
-        itoa((unsigned int)(unsigned long)ptr1, buf, 16);
-        kprint(buf, 7);
-        kprint("\n", 7);
-        freeMemory(ptr1);
-        kprint("Freed memory\n", 7);
-    } else {
-        kprint("Failed to allocate memory\n", 12);
-    }
-    kprint("\n", 7);
-}
-
-static void cmd_list(void) {
-    size_t count = initramfs_get_count();
-    
-    kprint("\nLoaded programs: ", 7);
-    char buf[32];
-    itoa(count, buf, 10);
-    kprint(buf, 7);
-    kprint("\n", 7);
-    
-    for (size_t i = 0; i < count; i++) {
-        struct program* prog = initramfs_get_program(i);
-        if (prog) {
-            kprint("  [", 7);
-            itoa(i, buf, 10);
-            kprint(buf, 7);
-            kprint("] Size: ", 7);
-            itoa(prog->size, buf, 10);
-            kprint(buf, 7);
-            kprint(" bytes\n", 7);
-        }
-    }
-    kprint("\n", 7);
-}
-
-static void cmd_progs(void) {
-    kprint("\n", 7);
-    userspace_list();
-    kprint("\n", 7);
-}
-
-static void cmd_isols(const char* args) {
-    if (!iso9660_is_initialized()) {
-        kprint("\nISO9660 filesystem is not initialized\n\n", 14);
-        return;
-    }
-    
-    const char* path = args;
-    while (*path == ' ') path++;
-    
-    if (*path == '\0') {
-        path = "/";
-    }
-    
-    kprint("\n", 7);
-    iso9660_list_dir(path);
+    kprint("  cd       - Change directory\n", 7);
     kprint("\n", 7);
 }
 
 static void cmd_cat(const char* args) {
     const char* path = args;
     while (*path == ' ') path++;
-
+    
     if (*path == '\0') {
-        kprint("\nUsage: cat <filename>\n\n", 12);
+        kprint("cat: Usage: cat <filename>\n", 7);
         return;
+    }
+    
+    char full_path[MAX_PATH_LENGTH];
+    
+    if (path[0] == '/') {
+        strcpy(full_path, path);
+    } else {
+        strcpy(full_path, current_working_directory);
+        if (full_path[strlen(full_path)-1] != '/') {
+            strcat(full_path, "/");
+        }
+        strcat(full_path, path);
     }
 
     size_t size;
-    const char* data = vfs_read(path, &size);
+    const char* data = vfs_read(full_path, &size);
 
     if (data == NULL) {
-        kprint("\nError: File '", 12);
-        kprint(path, 12);
-        kprint("' not found\n", 12);
+        kprint("cat: ", 7);
+        kprint(path, 7);
+        kprint(": No such file or directory\n", 7);
         return;
     }
 
@@ -158,7 +94,6 @@ static void cmd_ls(const char* args) {
     }
 
     int found_count = 0;
-    kprint("\n", 7);
 
     for (size_t i = 0; i < 128; i++) {
         if (!files[i].used) continue;
@@ -213,66 +148,7 @@ static void cmd_ls(const char* args) {
             kprint("    ", 7);
         }
     }
-    kprint("\n\n", 7);
-}
-
-static void cmd_isocat(const char* args) {
-    if (!iso9660_is_initialized()) {
-        kprint("\nISO9660 filesystem is not initialized\n\n", 14);
-        return;
-    }
-
-    const char* path = args;
-    while (*path == ' ') path++;
-
-    if (*path == '\0') {
-        kprint("\nUsage: isocat <path>\n\n", 12);
-        return;
-    }
-
-    size_t size;
-    const void* data = iso9660_find_file(path, &size);
-
-    if (!data) {
-        kprint("\nFile not found: ", 14);
-        kprint(path, 14);
-        kprint("\n\n", 14);
-        return;
-    }
-
     kprint("\n", 7);
-    kprint("File: ", 7);
-    kprint(path, 11);
-    kprint(" (", 7);
-    char buf[32];
-    itoa(size, buf, 10);
-    kprint(buf, 7);
-    kprint(" bytes)\n", 7);
-    kprint("Content:\n", 7);
-
-    size_t print_size = size > 1024 ? 1024 : size;
-    const char* text = (const char*)data;
-    for (size_t i = 0; i < print_size; i++) {
-        char c[2];
-        c[0] = text[i];
-        c[1] = '\0';
-
-        if (text[i] >= 32 && text[i] < 127) {
-            kprint(c, 7);
-        } else if (text[i] == '\n') {
-            kprint("\n", 7);
-        } else if (text[i] == '\t') {
-            kprint("    ", 7);
-        } else {
-            kprint(".", 7);
-        }
-    }
-
-    if (size > 1024) {
-        kprint("\n... (truncated, showing first 1024 bytes)\n", 7);
-    }
-
-    kprint("\n\n", 7);
 }
 
 static int parse_command(const char* command, char* argv[], int max_args) {
@@ -308,6 +184,33 @@ static int parse_command(const char* command, char* argv[], int max_args) {
 static int should_delay_prompt = 0;
 static int delay_ticks = 0;
 
+static int create_spawn_stack(char* argv[], int argc, int32_t** stack_out) {
+    if (argc == 0) return 0;
+
+    int total_size = 0;
+    for (int i = 0; i < argc; i++) {
+        total_size += strlen(argv[i]) + 1;
+    }
+    total_size += 1;
+
+    int32_t* stack = kmalloc(total_size * sizeof(int32_t));
+    if (!stack) return -1;
+
+    int pos = 0;
+
+    for (int i = argc - 1; i >= 0; i--) {
+        char* arg = argv[i];
+        for (int j = 0; arg[j] != '\0'; j++) {
+            stack[pos++] = (int32_t)(uint8_t)arg[j];
+        }
+        stack[pos++] = 0;
+    }
+
+    stack[pos++] = argc;
+    *stack_out = stack;
+    return pos;
+}
+
 static void execute_command(const char* command) {
     while (*command == ' ') command++;
     
@@ -322,12 +225,6 @@ static void execute_command(const char* command) {
     
     if (strcmp(argv[0], "help") == 0) {
         cmd_help();
-    } else if (strcmp(argv[0], "memtest") == 0) {
-        cmd_memtest();
-    } else if (strcmp(argv[0], "list") == 0) {
-        cmd_list();
-    } else if (strcmp(argv[0], "progs") == 0) {
-        cmd_progs();
     } else if (strcmp(argv[0], "pwd") == 0) {
         kprint(current_working_directory, 11);
         kprint("\n", 7);
@@ -341,21 +238,11 @@ static void execute_command(const char* command) {
         if (argc > 1) {
             cmd_cat(argv[1]);
         } else {
-            kprint("\nUsage: cat <filename>\n\n", 12);
+            kprint("cat: Usage: cat <filename>\n", 7);
         }
-    } else if (strcmp(argv[0], "isols") == 0) {
-        if (argc > 1) {
-            cmd_isols(argv[1]);
-        } else {
-            cmd_isols("/");
-        }
-    } else if (strcmp(argv[0], "isocat") == 0) {
-        if (argc > 1) {
-            cmd_isocat(argv[1]);
-        } else {
-            kprint("\nUsage: isocat <path>\n\n", 12);
-        }
-    } else {
+    } else if (strcmp(argv[0], "cd") == 0) {
+        shell_set_cwd(argv[1]);
+    }  else {
         char bin_path[64];
         int len = strlen(argv[0]);
         
@@ -407,13 +294,142 @@ const char* shell_get_cwd(void) {
     return current_working_directory;
 }
 
-void shell_set_cwd(const char* path) {
-    size_t i = 0;
-    while (path[i] != '\0' && i < MAX_PATH_LENGTH - 1) {
-        current_working_directory[i] = path[i];
+static void normalize_path(const char* input_path, char* output) {
+    char temp[MAX_PATH_LENGTH];
+    char* parts[32];
+    int part_count = 0;
+    int temp_idx = 0;
+    
+    if (input_path[0] == '/') {
+        temp[0] = '/';
+        temp_idx = 1;
+        const char* p = input_path + 1;
+        while (*p && temp_idx < MAX_PATH_LENGTH - 1) {
+            temp[temp_idx++] = *p++;
+        }
+    } else {
+        const char* cwd = current_working_directory;
+        while (*cwd && temp_idx < MAX_PATH_LENGTH - 1) {
+            temp[temp_idx++] = *cwd++;
+        }
+        if (temp_idx > 0 && temp[temp_idx-1] != '/') {
+            temp[temp_idx++] = '/';
+        }
+        const char* p = input_path;
+        while (*p && temp_idx < MAX_PATH_LENGTH - 1) {
+            temp[temp_idx++] = *p++;
+        }
+    }
+    temp[temp_idx] = '\0';
+    
+    int i = 0;
+    while (i < temp_idx) {
+        while (i < temp_idx && temp[i] == '/') i++;
+        
+        if (i >= temp_idx) break;
+        
+        int start = i;
+        while (i < temp_idx && temp[i] != '/') i++;
+        
+        int len = i - start;
+        if (len == 1 && temp[start] == '.') {
+            continue;
+        } else if (len == 2 && temp[start] == '.' && temp[start+1] == '.') {
+            if (part_count > 0) {
+                part_count--;
+            }
+        } else if (len > 0) {
+            if (part_count < 32) {
+                parts[part_count] = &temp[start];
+                temp[i] = '\0';
+                part_count++;
+            }
+        }
         i++;
     }
-    current_working_directory[i] = '\0';
+    
+    if (part_count == 0) {
+        output[0] = '/';
+        output[1] = '\0';
+    } else {
+        output[0] = '/';
+        int out_idx = 1;
+        for (int j = 0; j < part_count; j++) {
+            const char* part = parts[j];
+            while (*part && out_idx < MAX_PATH_LENGTH - 1) {
+                output[out_idx++] = *part++;
+            }
+            if (j < part_count - 1 && out_idx < MAX_PATH_LENGTH - 1) {
+                output[out_idx++] = '/';
+            }
+        }
+        output[out_idx] = '\0';
+    }
+}
+
+static bool directory_exists(const char* path) {
+    vfs_file_t* files = vfs_get_files();
+    size_t path_len = strlen(path);
+    
+    char normalized_path[64];
+    size_t i = 0;
+    while (path[i] && i < 63) {
+        normalized_path[i] = path[i];
+        i++;
+    }
+    normalized_path[i] = '\0';
+    
+    if (path_len > 1 && normalized_path[path_len - 1] == '/') {
+        normalized_path[path_len - 1] = '\0';
+        path_len--;
+    }
+    
+    for (size_t i = 0; i < 128; i++) {
+        if (!files[i].used || files[i].type != VFS_TYPE_DIR) continue;
+        
+        size_t name_len = strlen(files[i].name);
+        if (name_len < path_len) continue;
+        
+        bool match = true;
+        for (size_t j = 0; j < path_len; j++) {
+            if (files[i].name[j] != normalized_path[j]) {
+                match = false;
+                break;
+            }
+        }
+        
+        if (match) {
+            if (path_len == 1 && normalized_path[0] == '/') {
+                return true;
+            }
+            
+            if (name_len == path_len || 
+                (name_len > path_len && files[i].name[path_len] == '/')) {
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
+void shell_set_cwd(const char* path) {
+    if (path == NULL || path[0] == '\0') {
+        strcpy(current_working_directory, "/");
+        return;
+    }
+    
+    char normalized_path[MAX_PATH_LENGTH];
+    normalize_path(path, normalized_path);
+    
+    if (!directory_exists(normalized_path)) {
+        kprint("cd: ", 7);
+        kprint(normalized_path, 7);
+        kprint(": No such directory\n", 7);
+        return;
+    }
+    
+    strcpy(current_working_directory, normalized_path);
 }
 
 void shell_init(void) {

@@ -1,7 +1,7 @@
 # Roadmap for NovariaOS 0.2.0
 
 ## High Priority
-- [ ] Refactor internal shell
+- [X] Refactor internal shell
 
 ## Medium Priority
 - [ ] /dev/kbd
