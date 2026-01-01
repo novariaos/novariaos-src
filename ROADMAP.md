@@ -2,6 +2,9 @@
 
 ## High Priority
 - [X] Refactor internal shell
+- [X] VFS Refactoring for Mountable Filesystems
+- [ ] Block Device Abstraction Layer
+- [ ] EXT2 Filesystem Driver (Initial support)
 
 ## Medium Priority
 - [ ] /dev/kbd
