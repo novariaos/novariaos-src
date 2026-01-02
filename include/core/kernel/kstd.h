@@ -16,5 +16,4 @@ char* strchr(const char* str, int c);
 char* strstr(const char* haystack, const char* needle);
 void strcat_safe(char *dest, const char *src, size_t max_len);
 
-
 #endif // _KSTD_H

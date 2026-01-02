@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include <core/kernel/kstd.h>
+#include <stdint.h>
 
 void reverse(char* str, int length) {
     int start = 0;
@@ -142,4 +143,55 @@ char* strstr(const char* haystack, const char* needle) {
     }
 
     return NULL;
+}
+
+void memmove(void *dest, const void *src, size_t n) {
+    uint8_t *d = (uint8_t *)dest;
+    const uint8_t *s = (const uint8_t *)src;
+    
+    if (d == s || n == 0) {
+        return dest;
+    }
+
+    if (d < s || d >= s + n) {
+        if (n >= 8) {
+            uint64_t *d64 = (uint64_t *)d;
+            const uint64_t *s64 = (const uint64_t *)s;
+            size_t n64 = n / 8;
+
+            for (size_t i = 0; i < n64; i++) {
+                d64[i] = s64[i];
+            }
+            
+            d += n64 * 8;
+            s += n64 * 8;
+            n %= 8;
+        }
+
+        for (size_t i = 0; i < n; i++) {
+            d[i] = s[i];
+        }
+    } 
+    else {
+        d += n;
+        s += n;
+
+        if (n >= 8) {
+            uint64_t *d64 = (uint64_t *)(d - 8);
+            const uint64_t *s64 = (const uint64_t *)(s - 8);
+            size_t n64 = n / 8;
+            
+            for (size_t i = 0; i < n64; i++) {
+                d64[-i] = s64[-i];
+            }
+            
+            n %= 8;
+        }
+
+        for (size_t i = 0; i < n; i++) {
+            d[-i - 1] = s[-i - 1];
+        }
+    }
+    
+    return dest;
 }

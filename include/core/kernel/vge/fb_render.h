@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 // Built-in fallback font (used when system_font is not loaded)
-extern const uint8_t builtin_font[256][8];
+extern const uint8_t builtin_font[128][8];
 
 // Framebuffer rendering functions
 void init_fb(void);
