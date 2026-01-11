@@ -1,17 +1,18 @@
 .NVM0
 
 push 0
-push 47
-push 100
-push 101
-push 118
-push 47
-push 114
-push 97
-push 110
-push 100
-push 111
-push 109
+push '/'
+push 'd'
+push 'e'
+push 'v'
+push '/'
+push 'u'
+push 'r'
+push 'a'
+push 'n'
+push 'd'
+push 'o'
+push 'm'
 syscall open
 store 0
 

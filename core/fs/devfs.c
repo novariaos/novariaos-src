@@ -69,7 +69,7 @@ void devfs_init() {
     vfs_pseudo_register_with_fd("/dev/null", DEV_NULL_FD, dev_null_read, dev_null_write, dev_null_seek, NULL, NULL);
     vfs_pseudo_register_with_fd("/dev/zero", DEV_ZERO_FD, dev_zero_read, dev_zero_write, NULL, NULL, NULL);
     vfs_pseudo_register_with_fd("/dev/full", DEV_FULL_FD, dev_full_read, dev_full_write, NULL, NULL, NULL);
-    vfs_pseudo_register("/dev/random", dev_random_read, dev_random_write, NULL, NULL, NULL);
+    vfs_pseudo_register("/dev/urandom", dev_random_read, dev_random_write, NULL, NULL, NULL);
     
     vfs_pseudo_register_with_fd("/dev/stdin", DEV_STDIN_FD, NULL, NULL, NULL, NULL, NULL);
     vfs_pseudo_register_with_fd("/dev/stdout", DEV_STDOUT_FD, NULL, NULL, NULL, NULL, NULL);
