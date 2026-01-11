@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include <core/kernel/kstd.h>
+#include <core/kernel/vge/fb_render.h>
 #include <stdint.h>
 
 void reverse(char* str, int length) {
@@ -194,4 +195,8 @@ void memmove(void *dest, const void *src, size_t n) {
     }
     
     return dest;
+}
+
+void kprint(const char *str, int color) {
+    vgaprint(str, color);
 }

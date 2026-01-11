@@ -52,14 +52,12 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
                 break;
             }
             if (proc->sp < 1) {
-                LOG_WARN("Process %d: Stack underflow for exec\n", proc->pid);
+                LOG_WARN("Process %d: Stack underflow for spawn\n", proc->pid);
                 result = -1;
                 break;
             }
 
-
             int target_fd = proc->stack[proc->sp - 1];
-
             int argc = proc->stack[proc->sp - 2];
             
             LOG_TRACE("Process %d: Spawn called with fd=%d, argc=%d\n", 
@@ -69,7 +67,6 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
 
             char* argv[argc];
             int arg_index = 0;
-
             int stack_pos = proc->sp - 1;
             
             while (arg_index < argc && stack_pos >= 0) {
@@ -92,7 +89,6 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
                 }
 
                 int len = end_pos - start_pos + 1;
-
                 argv[arg_index] = kmalloc(len + 1);
                 if (!argv[arg_index]) {
                     LOG_WARN("Process %d: Failed to allocate memory\n", proc->pid);
@@ -177,13 +173,13 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
                 break;
             }
 
-            int initial_stack_size = 1;
-
+            int total_string_len = 0;
             for (int i = 0; i < argc; i++) {
-                initial_stack_size += strlen(argv[i]) + 1;
+                total_string_len += strlen(argv[i]) + 1;
             }
 
-            int32_t* initial_stack = kmalloc(initial_stack_size * sizeof(int32_t));
+            int stack_size = 1 + argc + total_string_len;
+            int32_t* initial_stack = kmalloc(stack_size * sizeof(int32_t));
             if (!initial_stack) {
                 LOG_WARN("Process %d: Failed to allocate initial stack\n", proc->pid);
                 kfree(bytecode);
@@ -195,8 +191,14 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
             }
 
             stack_pos = 0;
+            initial_stack[stack_pos++] = argc;
 
-            for (int i = argc - 1; i >= 0; i--) {
+            int argv_pointers_start = stack_pos;
+            stack_pos += argc;
+
+            for (int i = 0; i < argc; i++) {
+                initial_stack[argv_pointers_start + i] = stack_pos;
+                
                 char* arg = argv[i];
                 for (int j = 0; arg[j] != '\0'; j++) {
                     initial_stack[stack_pos++] = (int32_t)(uint8_t)arg[j];
@@ -204,11 +206,9 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
                 initial_stack[stack_pos++] = 0;
             }
 
-            initial_stack[stack_pos++] = argc;
-
             int new_pid = nvm_create_process_with_stack(bytecode, bytecode_size,
-                                                      (uint16_t[]){CAPS_NONE}, 1,
-                                                      initial_stack, stack_pos);
+                                                    (uint16_t[]){CAPS_NONE}, 1,
+                                                    initial_stack, stack_pos);
             kfree(initial_stack);
             caps_copy(nvm_get_process(proc->pid), nvm_get_process(new_pid));
 

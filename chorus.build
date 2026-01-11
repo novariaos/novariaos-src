@@ -220,7 +220,7 @@ targets:
   run:
     phony: true
     cmds:
-      - "${QEMU} -m 1024M -serial file:qemu.log -cdrom dist/build_${DATE}.iso"
+      - "${QEMU} -m 1024M -serial file:qemu.log -cdrom dist/build_${DATE}.iso -cpu core2duo"
   
   build-release:
     phony: true

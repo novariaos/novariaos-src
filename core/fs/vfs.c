@@ -18,14 +18,6 @@ static vfs_file_t files[MAX_FILES];
 static vfs_handle_t handles[MAX_HANDLES];
 static int next_fd = 3;
 
-// vfs_strcmp is now replaced with strcmp from kstd.h
-
-// vfs_strcpy is now replaced with strcpy from kstd.h
-
-// vfs_strlen is now replaced with strlen from kstd.h
-
-// vfs_strncmp is now replaced with strncmp from kstd.h
-
 static vfs_handle_t* get_handle(int fd) {
     for (int i = 0; i < MAX_HANDLES; i++) {
         if (handles[i].used && handles[i].fd == fd) {

@@ -1,15 +1,13 @@
 /* Entry point */
 ENTRY(_start)
 
-/* Библиотека Limine */
+/* Limine library */
 PROVIDE(hhdm = 0xffff800000000000);
 
 SECTIONS
 {
-    /* Ядро загружается по адресу в высшей половине */
     . = 0xffffffff80000000;
 
-    /* Мультизагрузочный заголовок (не нужен для Limine, но оставляем) */
     .multiboot : {
         *(.multiboot)
     }

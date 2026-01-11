@@ -92,10 +92,38 @@ int nvm_create_process_with_stack(uint8_t* bytecode, uint32_t size,
             processes[i].blocked = false;
             processes[i].wakeup_reason = 0;
 
-            // Initialize stack with provided values
             for(int j = 0; j < stack_count; j++) {
                 processes[i].stack[j] = initial_stack_values[j];
             }
+            
+            if(stack_count > 0) {
+                int argc = initial_stack_values[0];
+                
+                if(argc > 0) {
+                    int argv_pointers_start = 1;
+                    int strings_start = 1 + argc;
+
+                    for(int arg_idx = 0; arg_idx < argc; arg_idx++) {
+                        int string_pointer = initial_stack_values[argv_pointers_start + arg_idx];
+                        if(string_pointer >= 0 && string_pointer < stack_count) {
+                            int str_start = string_pointer;
+                            int str_end = str_start;
+                            
+                            while(str_end < stack_count && initial_stack_values[str_end] != 0) {
+                                str_end++;
+                            }
+
+                            int len = str_end - str_start;
+                            for(int k = 0; k < len / 2; k++) {
+                                int32_t temp = processes[i].stack[str_start + k];
+                                processes[i].stack[str_start + k] = processes[i].stack[str_end - 1 - k];
+                                processes[i].stack[str_end - 1 - k] = temp;
+                            }
+                        }
+                    }
+                }
+            }
+            
             processes[i].sp = stack_count;
 
             // Initializing capabilities

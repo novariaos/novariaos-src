@@ -244,7 +244,48 @@ static void execute_command(const char* command) {
             if (data && size > 0) {
                 should_delay_prompt = 1;
                 delay_ticks = 50;
-                nvm_execute((uint8_t*)data, size, (uint16_t[]){CAP_ALL}, 1);
+                
+                int total_string_len = 0;
+                for (int i = 0; i < argc; i++) {
+                    total_string_len += strlen(argv[i]) + 1;
+                }
+
+                int stack_size = 1 + argc + total_string_len;
+                int32_t* initial_stack = kmalloc(stack_size * sizeof(int32_t));
+                
+                if (!initial_stack) {
+                    kprint("Error: Memory allocation failed\n", 12);
+                    return;
+                }
+                
+                int stack_pos = 0;
+
+                initial_stack[stack_pos++] = argc;
+
+                int argv_pointers_start = stack_pos;
+                stack_pos += argc;
+
+                for (int i = 0; i < argc; i++) {
+                    initial_stack[argv_pointers_start + i] = stack_pos;
+
+                    char* arg = argv[i];
+                    for (int j = 0; arg[j] != '\0'; j++) {
+                        initial_stack[stack_pos++] = (int32_t)(uint8_t)arg[j];
+                    }
+                    initial_stack[stack_pos++] = 0;
+                }
+
+                int pid = nvm_create_process_with_stack(
+                    (uint8_t*)data, size,
+                    (uint16_t[]){CAP_ALL}, 1,
+                    initial_stack, stack_pos
+                );
+                
+                kfree(initial_stack);
+                
+                if (pid < 0) {
+                    kprint("Error: Failed to create process\n", 12);
+                }
                 return;
             } else {
                 kprint("Error: Failed to read program file\n", 12);
