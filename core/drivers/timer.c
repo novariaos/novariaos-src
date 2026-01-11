@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
+#include <core/kernel/nvm/nvm.h>
 #include <core/drivers/timer.h>
-#include <core/kernel/vge/fb_render.h>
+#include <core/kernel/kstd.h>
 #include <core/arch/idt.h>
 #include <core/arch/io.h>
-#include <core/kernel/nvm/nvm.h>
 
 void pit_init() {
     int16_t divisor = 1193182 / 1000; // 1000 Hz

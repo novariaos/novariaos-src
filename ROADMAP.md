@@ -4,8 +4,7 @@
 - [X] Refactor internal shell
 
 ## Medium Priority
-- [ ] /dev/kbd
-- [ ] /dev/tty0
+- [ ] /dev/console (WIP: current stage — write only)
 - [ ] Poor /sys/pci (vendor/device without interrupts)
 
 ## Low Priority 

@@ -12,7 +12,6 @@ void clear_screen(void);
 void newline(void);
 void fb_putchar(char c, int color);
 void vgaprint(const char *str, int color);
-void kprint(const char *str, int color);
 void set_bg_color(uint32_t color);
 void set_fg_color(uint32_t color);
 void vga_backspace(void);
