@@ -352,10 +352,6 @@ void vgaprint(const char *str, int color) {
     }
 }
 
-void kprint(const char *str, int color) {
-    vgaprint(str, color);
-}
-
 void set_bg_color(uint32_t color) {
     fb_info.bg_color = color;
 }
