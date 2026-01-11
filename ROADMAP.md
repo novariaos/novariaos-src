@@ -1,13 +1,15 @@
 # Roadmap for NovariaOS 0.2.0
 
-# Roadmap for NovariaOS 0.2.0
-
 ## High Priority
-- [X] Refactor internal shell
-- [X] VFS Refactoring for Mountable Filesystems
-- [X] Block Device Abstraction Layer
-- [X] Endianness conversion utilities (le16/le32/le64, be16/be32/be64)
+- [x] Refactor internal shell
+- [x] VFS Refactoring for Mountable Filesystems
+- [x] Block Device Abstraction Layer
+- [x] Endianness conversion utilities (le16/le32/le64, be16/be32/be64)
 - [ ] EXT2 Filesystem Driver (Initial support)
+    - [x] Superblock and Group Descriptor Table parsing
+    - [ ] Bitmap management & Resource allocation (#14)
+    - [ ] Inode and Directory entry management (#14)
+    - [ ] Basic Read/Write operations
 - [ ] FAT32 Filesystem Driver (Initial support)
 
 ## Medium Priority
