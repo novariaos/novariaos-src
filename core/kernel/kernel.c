@@ -113,7 +113,6 @@ void kmain() {
         iso9660_mount_to_vfs("/", "/");
         LOG_DEBUG("ISO contents mounted to /\n");
 
-        // Debug: check if font file was mounted
         LOG_DEBUG("Checking mounted files...\n");
         vfs_list();
  
@@ -185,8 +184,8 @@ void kmain() {
         kprint(":: No programs found in initramfs\n", 14);
     }
 
-     shell_init();
-     shell_run();
+    shell_init();
+    shell_run();
 
     // while(true) {
     //     nvm_scheduler_tick();

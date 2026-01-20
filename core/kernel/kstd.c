@@ -197,6 +197,23 @@ void memmove(void *dest, const void *src, size_t n) {
     return dest;
 }
 
+void* memcpy(void* dest, const void* src, size_t n) {
+    char* d = (char*)dest;
+    const char* s = (const char*)src;
+    for (size_t i = 0; i < n; i++) {
+        d[i] = s[i];
+    }
+    return dest;
+}
+
+void* memset(void* s, int c, size_t n) {
+    char* p = (char*)s;
+    for (size_t i = 0; i < n; i++) {
+        p[i] = (char)c;
+    }
+    return s;
+}
+
 void kprint(const char *str, int color) {
     vgaprint(str, color);
 }

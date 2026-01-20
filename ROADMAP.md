@@ -3,13 +3,13 @@
 ## High Priority
 - [X] Refactor internal shell
 - [ ] Memory manager rework:
-    - [ ] Buddy
-        - [ ] Buddy allocation
-        - [ ] Buddy free
+    - [X] Buddy
+        - [X] Buddy allocation
+        - [X] Buddy free
     - [ ] Slab
         - [ ] Slab allocation
         - [ ] Slab free
-    - [ ] Kstd allocations
+    - [ ] Kstd allocations (WIP: current stage — )
         - [ ] kmalloc
         - [ ] kfree
 

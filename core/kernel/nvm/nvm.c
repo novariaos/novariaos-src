@@ -137,6 +137,7 @@ int nvm_create_process_with_stack(uint8_t* bytecode, uint32_t size,
                 processes[i].locals[j] = 0;
             }
 
+            procfs_register(i, &processes[i]);
             return i;
         }
     }

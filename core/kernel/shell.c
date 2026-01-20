@@ -198,6 +198,10 @@ static void execute_command(const char* command) {
     
     if (strcmp(argv[0], "help") == 0) {
         cmd_help();
+    } else if (strcmp(argv[0], "memtest") == 0) {
+        memory_test();
+    } else if (strcmp(argv[0], "memleak") == 0) {
+        check_memory_leaks();
     } else if (strcmp(argv[0], "clear") == 0) {
         clear_screen();
     } else if (strcmp(argv[0], "pwd") == 0) {
