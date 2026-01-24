@@ -17,7 +17,7 @@
         - [ ] kfree
 - [ ] EXT2 Filesystem Driver (Initial support)
     - [x] Superblock and Group Descriptor Table parsing
-    - [ ] Bitmap management & Resource allocation (#14)
+    - [x] Bitmap management & Resource allocation (#14)
     - [ ] Inode and Directory entry management (#14)
     - [ ] Basic Read/Write operations
 - [ ] FAT32 Filesystem Driver (Initial support)
