@@ -18,6 +18,8 @@ char* strstr(const char* haystack, const char* needle);
 void strcat_safe(char *dest, const char *src, size_t max_len);
 void* memmove(void *dest, const void *src, size_t n);
 void kprint(const char *str, int color);
+void* memcpy(void* dest, const void* src, size_t n);
+void* memset(void* s, int c, size_t n);
 
 // Endianness conversion utilities
 // x86_64 is little-endian, so these are mostly no-ops

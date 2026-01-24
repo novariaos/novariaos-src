@@ -5,6 +5,16 @@
 - [x] VFS Refactoring for Mountable Filesystems
 - [x] Block Device Abstraction Layer
 - [x] Endianness conversion utilities (le16/le32/le64, be16/be32/be64)
+- [ ] Memory manager rework:
+    - [X] Buddy
+        - [X] Buddy allocation
+        - [X] Buddy free
+    - [ ] Slab
+        - [ ] Slab allocation
+        - [ ] Slab free
+    - [ ] Kstd allocations (WIP: current stage — )
+        - [ ] kmalloc
+        - [ ] kfree
 - [ ] EXT2 Filesystem Driver (Initial support)
     - [x] Superblock and Group Descriptor Table parsing
     - [ ] Bitmap management & Resource allocation (#14)
@@ -13,7 +23,7 @@
 - [ ] FAT32 Filesystem Driver (Initial support)
 
 ## Medium Priority
-- [ ] /dev/console (WIP: current stage — write only)
+- [ ] /dev/tty (WIP: current stage — write only)
 - [ ] Poor /sys/pci (vendor/device without interrupts)
 
 ## Low Priority 

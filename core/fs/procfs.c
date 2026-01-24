@@ -541,46 +541,30 @@ vfs_ssize_t procfs_cpuinfo(vfs_file_t* file, void* buf, size_t count, vfs_off_t*
 
 vfs_ssize_t procfs_meminfo(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos) {
     char meminfo_buf[512];
-    int meminfo_initialized = 0;
 
-    if (!meminfo_initialized) {
-        size_t memTotal = getMemTotal();
-        size_t memFree = getMemFree();
-        size_t memUsed = memTotal - memFree;
+    // Always recalculate memory info
+    size_t memTotal = getMemTotal();
+    size_t buddyFree = getMemFree();  // free blocks in buddy allocator
+    size_t allocated = getMemUsed();  // memory allocated via kmalloc
+    size_t memUsed = allocated;
+    size_t memFree = memTotal - allocated;  // available memory for allocation
 
-        size_t overhead = 0;
-        MemoryBlock* curr = freeList;
-        int freeBlocks = 0;
-        while (curr != NULL) {
-            if (curr->magic == MAGIC_FREE) {
-                freeBlocks++;
-                overhead += sizeof(MemoryBlock);
-            }
-            curr = curr->next;
-        }
-        
-        char total_str[32], used_str[32], free_str[32], ovh_str[32];
-        formatMemorySize(memTotal, total_str);
-        formatMemorySize(memUsed, used_str);
-        formatMemorySize(memFree, free_str);
-        formatMemorySize(overhead, ovh_str);
+    size_t overhead = 0; // Buddy allocator doesn't have per-block overhead like linked list
 
-        strcpy_safe(meminfo_buf, "MemTotal       : ", sizeof(meminfo_buf));
-        strcat_safe(meminfo_buf, total_str, sizeof(meminfo_buf));
-        strcat_safe(meminfo_buf, "\nMemUsed        : ", sizeof(meminfo_buf));
-        strcat_safe(meminfo_buf, used_str, sizeof(meminfo_buf));
-        strcat_safe(meminfo_buf, "\nMemFree        : ", sizeof(meminfo_buf));
-        strcat_safe(meminfo_buf, free_str, sizeof(meminfo_buf));
-        strcat_safe(meminfo_buf, "\nOverhead       : ", sizeof(meminfo_buf));
-        strcat_safe(meminfo_buf, ovh_str, sizeof(meminfo_buf));
-        strcat_safe(meminfo_buf, "\nFree blocks    : ", sizeof(meminfo_buf));
-        char blocks_str[16];
-        itoa(freeBlocks, blocks_str, 10);
-        strcat_safe(meminfo_buf, blocks_str, sizeof(meminfo_buf));
-        strcat_safe(meminfo_buf, "\n", sizeof(meminfo_buf));
+    char total_str[32], used_str[32], free_str[32], ovh_str[32], buddy_free_str[32];
+    formatMemorySize(memTotal, total_str);
+    formatMemorySize(memUsed, used_str);
+    formatMemorySize(memFree, free_str);
+    formatMemorySize(overhead, ovh_str);
+    formatMemorySize(buddyFree, buddy_free_str);
 
-        meminfo_initialized = 1;
-    }
+    strcpy_safe(meminfo_buf, "MemTotal       : ", sizeof(meminfo_buf));
+    strcat_safe(meminfo_buf, total_str, sizeof(meminfo_buf));
+    strcat_safe(meminfo_buf, "\nMemUsed        : ", sizeof(meminfo_buf));
+    strcat_safe(meminfo_buf, used_str, sizeof(meminfo_buf));
+    strcat_safe(meminfo_buf, "\nMemFree        : ", sizeof(meminfo_buf));
+    strcat_safe(meminfo_buf, free_str, sizeof(meminfo_buf));
+    strcat_safe(meminfo_buf, "\n", sizeof(meminfo_buf));
 
     size_t len = strlen(meminfo_buf);
     if (*pos >= len) {

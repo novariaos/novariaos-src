@@ -4,7 +4,7 @@
 #include <core/arch/entropy.h>
 #include <core/kernel/kstd.h>
 #include <core/fs/vfs.h>
-#include <core/kernel/kstd.h>
+#include <stdbool.h>
 #include <string.h>
 
 // Device registry for new VFS interface
@@ -159,12 +159,13 @@ static vfs_off_t dev_null_seek(vfs_file_t* file, vfs_off_t offset, int whence, v
     return 0;
 }
 
-static vfs_ssize_t dev_console_read(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos) {
-    (void)file; (void)pos;
+static vfs_ssize_t dev_tty_read(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos) {
+    (void)file; (void)buf; (void)count; (void)pos;
     return 1;
 }
 
-static vfs_ssize_t dev_console_write(vfs_file_t* file, const void* buf, size_t count, vfs_off_t* pos) {
+static vfs_ssize_t dev_tty_write(vfs_file_t* file, const void* buf, size_t count, vfs_off_t* pos) {
+    (void)file; (void)pos;
     kprint(buf, 7);
     return 0;
 }
@@ -197,7 +198,7 @@ void devfs_init(void) {
     devfs_register_device("zero", dev_zero_read, dev_zero_write, NULL);
     devfs_register_device("full", dev_full_read, dev_full_write, NULL);
     devfs_register_device("urandom", dev_urandom_read, dev_urandom_write, NULL);
-    devfs_register_device("console", dev_console_read, dev_console_write, NULL);
+    devfs_register_device("tty", dev_tty_read, dev_tty_write, NULL);
     devfs_register_device("stdin", NULL, NULL, NULL);
     devfs_register_device("stdout", NULL, NULL, NULL);
     devfs_register_device("stderr", NULL, NULL, NULL);
@@ -207,7 +208,7 @@ void devfs_init(void) {
     vfs_pseudo_register_with_fd("/dev/full", DEV_FULL_FD, dev_full_read, dev_full_write, NULL, NULL, NULL);
     
     vfs_pseudo_register("/dev/urandom", dev_urandom_read, dev_urandom_write, NULL, NULL, NULL);
-    vfs_pseudo_register("/dev/console", dev_console_read, dev_console_write, NULL, NULL, NULL);
+    vfs_pseudo_register("/dev/tty", dev_tty_read, dev_tty_write, NULL, NULL, NULL);
 
     vfs_pseudo_register_with_fd("/dev/stdin", DEV_STDIN_FD, NULL, NULL, NULL, NULL, NULL);
     vfs_pseudo_register_with_fd("/dev/stdout", DEV_STDOUT_FD, NULL, NULL, NULL, NULL, NULL);
