@@ -10,9 +10,13 @@ push 'd'
 push 'e'
 push 'v'
 push '/'
-push 't'
-push 't'
-push 'y'
+push 'c'
+push 'o'
+push 'n'
+push 's'
+push 'o'
+push 'l'
+push 'e'
 syscall open
 store 1  ; fd2
 

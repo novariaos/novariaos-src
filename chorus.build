@@ -29,12 +29,12 @@ targets:
       - "find . -iname '*.c' -exec dirname {} \\; | uniq | sed 's/\\.\\///g' | xargs printf -- '${OBJ_DIR}/%s\\n' | xargs mkdir -p"
 
   kernel.bin:
-    deps: [prepare, core/arch/boot, core/kernel/kernel, core/kernel/nvm/caps, core/kernel/kstd, core/arch/spinlock, core/kernel/mem/buddy, core/kernel/mem/allocator,
-        core/kernel/vge/fb, core/kernel/vge/fb_render, core/drivers/serial, core/drivers/timer, core/drivers/keyboard,
-        core/fs/ramfs, core/fs/initramfs, core/fs/vfs, core/fs/procfs, core/arch/cpuid, core/fs/iso9660, core/fs/devfs, core/fs/block, core/fs/block_dev_vfs, core/fs/bitmap, core/fs/inode, core/fs/dirent, core/arch/entropy,
-        core/crypto/chacha20, core/crypto/chacha20_rng, core/drivers/cdrom, core/kernel/nvm/nvm, core/kernel/nvm/syscalls,
-        core/kernel/shell, core/kernel/vge/psf, core/kernel/userspace, rootfs/usr/src/userspace_init,
-        rootfs/usr/src/echo, rootfs/usr/src/clear, rootfs/usr/src/rm, rootfs/usr/src/write, rootfs/usr/src/nova, rootfs/usr/src/uname]
+    deps: [prepare, core/arch/boot, core/kernel/kernel, core/kernel/nvm/caps, core/kernel/kstd, core/arch/spinlock, core/kernel/mem/buddy,
+        core/kernel/mem/allocator, core/kernel/vge/fb, core/kernel/vge/fb_render, core/drivers/serial, core/drivers/timer, core/drivers/keyboard,
+        core/fs/ramfs, core/fs/initramfs, core/fs/vfs, core/fs/procfs, core/arch/cpuid, core/fs/iso9660, core/fs/devfs, core/fs/block,
+        core/fs/block_dev_vfs, core/fs/bitmap, core/fs/inode, core/fs/dirent, core/arch/entropy, core/crypto/chacha20, core/crypto/chacha20_rng,
+        core/drivers/cdrom, core/kernel/nvm/nvm, core/kernel/nvm/syscalls, core/kernel/shell, core/kernel/vge/psf, core/kernel/userspace,
+        rootfs/usr/src/userspace_init, rootfs/usr/src/echo, rootfs/usr/src/clear, rootfs/usr/src/rm, rootfs/usr/src/write, rootfs/usr/src/nova, rootfs/usr/src/uname]
     cmds:
       - "mkdir -p ${BUILD_DIR}/boot"
       - "${LD} ${LDFLAGS} -o ${BUILD_DIR}/boot/${@} $(echo ${^} | xargs | cut -d ' ' -f2- | xargs printf -- '${OBJ_DIR}/%s.o\\n' | xargs)"
@@ -250,13 +250,8 @@ targets:
     cmds:
       - "./tools/nvma/nvma.bin samples/test_cdrom.asm apps/test_cdrom.bin"
 
-  rebuild-initramfs:
-    phony: true
-    cmds:
-      - "ruby initramfs-rebuild.rb"
-
   iso:
-    deps: [prepare, kernel.bin, rebuild-initramfs]
+    deps: [prepare, kernel.bin]
     cmds:
       - "xorriso -as mkisofs -quiet -iso-level 3 -o ${BUILD_DIR}/boot/rootfs.img rootfs/"
       - "xorriso -as mkisofs -b limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table --protective-msdos-label -iso-level 3 -partition_offset 64 -quiet -o dist/build_${DATE}.iso ${BUILD_DIR}/boot/"

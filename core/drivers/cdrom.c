@@ -23,7 +23,7 @@ static int cdrom_read_blocks_impl(struct block_device* dev, uint64_t lba, size_t
     }
 
     memcpy(buf, (int8_t*)iso_memory + offset, bytes_to_read);
-    return 0; // Success
+    return 0;
 }
 
 static int cdrom_write_blocks_impl(struct block_device* dev, uint64_t lba, size_t count, const void* buf) {

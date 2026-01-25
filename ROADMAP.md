@@ -12,7 +12,7 @@
     - [ ] Slab
         - [ ] Slab allocation
         - [ ] Slab free
-    - [ ] Kstd allocations (WIP: current stage — )
+    - [ ] Kstd allocations (WIP: current stage — buddy only)
         - [ ] kmalloc
         - [ ] kfree
 - [ ] EXT2 Filesystem Driver (Initial support)
@@ -31,5 +31,5 @@
 - [ ] Nutils:
     - [ ] cat
     - [ ] ls
-- [ ] Passing ARGC, ARGV for binaries running from the Internal Shell
+- [X] Passing ARGC, ARGV for binaries running from the Internal Shell
 - [ ] Full init system
