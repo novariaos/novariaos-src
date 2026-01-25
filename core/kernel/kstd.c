@@ -146,7 +146,7 @@ char* strstr(const char* haystack, const char* needle) {
     return NULL;
 }
 
-void memmove(void *dest, const void *src, size_t n) {
+void* memmove(void *dest, const void *src, size_t n) {
     uint8_t *d = (uint8_t *)dest;
     const uint8_t *s = (const uint8_t *)src;
     

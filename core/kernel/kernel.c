@@ -15,6 +15,8 @@
 #include <core/fs/initramfs.h>
 #include <core/fs/iso9660.h>
 #include <core/fs/vfs.h>
+#include <core/fs/block_dev_vfs.h>
+#include <core/fs/block.h>
 #include <rootfs/usr/src/userspace_init.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -66,10 +68,9 @@ void kmain() {
     init_serial();
     ramfs_init();
     vfs_init();
+    block_init();
     syslog_init();
     keyboard_init();
-    
-    cdrom_init();
     
     void* iso_location = NULL;
     size_t iso_size = 0;
@@ -107,6 +108,7 @@ void kmain() {
     
     if (iso_location) {
         cdrom_set_iso_data(iso_location, iso_size);
+        cdrom_init();
         iso9660_init(iso_location, iso_size);
         LOG_DEBUG("ISO9660 filesystem mounted\n");
 
@@ -121,6 +123,9 @@ void kmain() {
     } else {
         LOG_DEBUG(":: ISO9660 filesystem not found\n");
     }
+
+    // Register any discovered block devices with the VFS.
+    block_dev_vfs_init();
     
     const char* ascii_art[] = {
         " _   _                      _        ___  ____  ",

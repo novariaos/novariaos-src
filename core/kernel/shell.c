@@ -184,6 +184,33 @@ static int parse_command(const char* command, char* argv[], int max_args) {
 static int should_delay_prompt = 0;
 static int delay_ticks = 0;
 
+static int create_spawn_stack(char* argv[], int argc, int32_t** stack_out) {
+    if (argc == 0) return 0;
+
+    int total_size = 0;
+    for (int i = 0; i < argc; i++) {
+        total_size += strlen(argv[i]) + 1;
+    }
+    total_size += 1;
+
+    int32_t* stack = kmalloc(total_size * sizeof(int32_t));
+    if (!stack) return -1;
+
+    int pos = 0;
+
+    for (int i = argc - 1; i >= 0; i--) {
+        char* arg = argv[i];
+        for (int j = 0; arg[j] != '\0'; j++) {
+            stack[pos++] = (int32_t)(uint8_t)arg[j];
+        }
+        stack[pos++] = 0;
+    }
+
+    stack[pos++] = argc;
+    *stack_out = stack;
+    return pos;
+}
+
 static void execute_command(const char* command) {
     while (*command == ' ') command++;
     
@@ -191,7 +218,7 @@ static void execute_command(const char* command) {
         return;
     }
     
-    char* argv[16];
+char* argv[16];
     int argc = parse_command(command, argv, 16);
     
     if (argc == 0) return;
@@ -240,7 +267,6 @@ static void execute_command(const char* command) {
         bin_path[7 + len] = 'i';
         bin_path[8 + len] = 'n';
         bin_path[9 + len] = '\0';
-        
         if (vfs_exists(bin_path)) {
             size_t size;
             const char* data = vfs_read(bin_path, &size);

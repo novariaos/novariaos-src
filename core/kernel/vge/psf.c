@@ -1,6 +1,7 @@
 #include <core/fs/vfs.h>
 #include <core/kernel/mem.h>
 #include <core/kernel/vge/fb_render.h>
+#include <core/kernel/kstd.h>
 #include <stdint.h>
 #include <stddef.h>
 

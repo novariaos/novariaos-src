@@ -13,6 +13,160 @@
 static char cpuinfo_buf[2048];
 static int cpuinfo_initialized = 0;
 
+// Procfs entry registry for new VFS interface
+#define MAX_PROCFS_ENTRIES 64
+
+typedef struct {
+    char name[128];
+    vfs_dev_read_t read_fn;
+    void* data;
+    bool used;
+    bool is_dir;
+} procfs_entry_t;
+
+static procfs_entry_t procfs_entries[MAX_PROCFS_ENTRIES];
+
+static procfs_entry_t* procfs_find_entry(const char* name) {
+    for (int i = 0; i < MAX_PROCFS_ENTRIES; i++) {
+        if (procfs_entries[i].used && strcmp(procfs_entries[i].name, name) == 0) {
+            return &procfs_entries[i];
+        }
+    }
+    return NULL;
+}
+
+static void procfs_add_entry(const char* name, vfs_dev_read_t read_fn, void* data, bool is_dir) {
+    for (int i = 0; i < MAX_PROCFS_ENTRIES; i++) {
+        if (!procfs_entries[i].used) {
+            strcpy(procfs_entries[i].name, name);
+            procfs_entries[i].read_fn = read_fn;
+            procfs_entries[i].data = data;
+            procfs_entries[i].is_dir = is_dir;
+            procfs_entries[i].used = true;
+            return;
+        }
+    }
+}
+
+static void procfs_remove_entry(const char* name) {
+    for (int i = 0; i < MAX_PROCFS_ENTRIES; i++) {
+        if (procfs_entries[i].used && strcmp(procfs_entries[i].name, name) == 0) {
+            procfs_entries[i].used = false;
+            return;
+        }
+    }
+}
+
+// ProcFS operations for new VFS interface
+static int procfs_mount(vfs_mount_t* mnt, const char* device, void* data) {
+    (void)device; (void)data;
+    mnt->fs_private = NULL;
+    return 0;
+}
+
+static int procfs_unmount(vfs_mount_t* mnt) {
+    (void)mnt;
+    return 0;
+}
+
+static int procfs_stat(vfs_mount_t* mnt, const char* path, vfs_stat_t* stat) {
+    (void)mnt;
+
+    // Root directory
+    if (path[0] == '\0' || strcmp(path, "/") == 0) {
+        stat->st_mode = VFS_S_IFDIR | 0555;
+        stat->st_size = 0;
+        stat->st_blksize = 512;
+        stat->st_mtime = 0;
+        return 0;
+    }
+
+    // Look for entry
+    procfs_entry_t* entry = procfs_find_entry(path);
+    if (entry) {
+        if (entry->is_dir) {
+            stat->st_mode = VFS_S_IFDIR | 0555;
+        } else {
+            stat->st_mode = VFS_S_IFREG | 0444;
+        }
+        stat->st_size = 0;
+        stat->st_blksize = 512;
+        stat->st_mtime = 0;
+        return 0;
+    }
+
+    return -ENOENT;
+}
+
+static int procfs_readdir_impl(vfs_mount_t* mnt, const char* path, vfs_dirent_t* entries, size_t max) {
+    (void)mnt;
+
+    int count = 0;
+    size_t path_len = strlen(path);
+
+    for (int i = 0; i < MAX_PROCFS_ENTRIES && (size_t)count < max; i++) {
+        if (!procfs_entries[i].used) continue;
+
+        const char* entry_name = procfs_entries[i].name;
+        size_t entry_len = strlen(entry_name);
+
+        // Check if entry is direct child of path
+        bool is_child = false;
+
+        if (path_len == 0 || (path_len == 1 && path[0] == '/')) {
+            // Root - look for top-level entries (no slash or single leading slash then no more)
+            int slashes = 0;
+            for (size_t j = 0; j < entry_len; j++) {
+                if (entry_name[j] == '/') slashes++;
+            }
+            is_child = (slashes == 0);
+        } else {
+            // Check if entry starts with path/ and has no more slashes
+            if (entry_len > path_len &&
+                strncmp(entry_name, path, path_len) == 0 &&
+                entry_name[path_len] == '/') {
+                int slashes = 0;
+                for (size_t j = path_len + 1; j < entry_len; j++) {
+                    if (entry_name[j] == '/') slashes++;
+                }
+                is_child = (slashes == 0);
+            }
+        }
+
+        if (is_child) {
+            const char* basename = entry_name;
+            if (path_len > 0) {
+                basename = entry_name + path_len;
+                if (*basename == '/') basename++;
+            }
+            strcpy(entries[count].d_name, basename);
+            entries[count].d_type = procfs_entries[i].is_dir ? VFS_TYPE_DIR : VFS_TYPE_FILE;
+            count++;
+        }
+    }
+
+    return count;
+}
+
+static const vfs_fs_ops_t procfs_ops = {
+    .name = "procfs",
+    .mount = procfs_mount,
+    .unmount = procfs_unmount,
+    .stat = procfs_stat,
+    .readdir = procfs_readdir_impl,
+    // Other operations use legacy mechanism via vfs_pseudo_register
+    .open = NULL,
+    .close = NULL,
+    .read = NULL,
+    .write = NULL,
+    .seek = NULL,
+    .mkdir = NULL,
+    .rmdir = NULL,
+    .unlink = NULL,
+    .ioctl = NULL,
+    .sync = NULL,
+};
+
 static vfs_ssize_t procfs_bytecode_read(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos) {
     nvm_process_t* process = (nvm_process_t*)file->dev_data;
     if (process == NULL) return -1;
@@ -256,12 +410,28 @@ static vfs_ssize_t procfs_stack_read(vfs_file_t* file, void* buf, size_t count, 
     return to_copy;
 }
 
-void procfs_init() {
-    vfs_mkdir("/proc");
+void procfs_init(void) {
+    // Initialize entry registry
+    for (int i = 0; i < MAX_PROCFS_ENTRIES; i++) {
+        procfs_entries[i].used = false;
+    }
+
+    // Register procfs as a filesystem
+    vfs_register_filesystem("procfs", &procfs_ops, VFS_FS_NODEV | VFS_FS_VIRTUAL | VFS_FS_READONLY);
+    vfs_mount_fs("procfs", "/proc", NULL, VFS_MNT_READONLY, NULL);
+
+    // Register entries in new registry (for readdir/stat)
+    procfs_add_entry("cpuinfo", procfs_cpuinfo, NULL, false);
+    procfs_add_entry("meminfo", procfs_meminfo, NULL, false);
+    procfs_add_entry("pci", procfs_pci, NULL, false);
+    procfs_add_entry("uptime", procfs_uptime, NULL, false);
+
+    // Register via legacy mechanism (for actual I/O)
     vfs_pseudo_register("/proc/cpuinfo", procfs_cpuinfo, NULL, NULL, NULL, NULL);
     vfs_pseudo_register("/proc/meminfo", procfs_meminfo, NULL, NULL, NULL, NULL);
     vfs_pseudo_register("/proc/pci", procfs_pci, NULL, NULL, NULL, NULL);
     vfs_pseudo_register("/proc/uptime", procfs_uptime, NULL, NULL, NULL, NULL);
+
     cpuinfo_init();
 }
 
@@ -269,22 +439,39 @@ void procfs_register(int pid, void* process_data) {
     char pid_str[16];
     char path[64];
     char filepath[128];
-    
+    char relpath[128];
+
     itoa(pid, pid_str, 10);
 
     strcpy(path, "/proc/");
     strcat(path, pid_str);
-    
+
+    // Register in new entry registry (relative paths without /proc/)
+    procfs_add_entry(pid_str, NULL, process_data, true);
+
+    strcpy(relpath, pid_str);
+    strcat(relpath, "/status");
+    procfs_add_entry(relpath, procfs_status_read, process_data, false);
+
+    strcpy(relpath, pid_str);
+    strcat(relpath, "/stack");
+    procfs_add_entry(relpath, procfs_stack_read, process_data, false);
+
+    strcpy(relpath, pid_str);
+    strcat(relpath, "/bytecode");
+    procfs_add_entry(relpath, procfs_bytecode_read, process_data, false);
+
+    // Register via legacy mechanism
     vfs_mkdir(path);
-    
+
     strcpy(filepath, path);
     strcat(filepath, "/status");
     vfs_pseudo_register(filepath, procfs_status_read, NULL, NULL, NULL, process_data);
-    
+
     strcpy(filepath, path);
     strcat(filepath, "/stack");
     vfs_pseudo_register(filepath, procfs_stack_read, NULL, NULL, NULL, process_data);
-    
+
     strcpy(filepath, path);
     strcat(filepath, "/bytecode");
     vfs_pseudo_register(filepath, procfs_bytecode_read, NULL, NULL, NULL, process_data);
@@ -294,24 +481,41 @@ void procfs_unregister(int pid) {
     char pid_str[16];
     char path[64];
     char filepath[128];
-    
+    char relpath[128];
+
     itoa(pid, pid_str, 10);
 
     strcpy(path, "/proc/");
     strcat(path, pid_str);
-    
+
+    // Remove from new entry registry
+    strcpy(relpath, pid_str);
+    strcat(relpath, "/status");
+    procfs_remove_entry(relpath);
+
+    strcpy(relpath, pid_str);
+    strcat(relpath, "/stack");
+    procfs_remove_entry(relpath);
+
+    strcpy(relpath, pid_str);
+    strcat(relpath, "/bytecode");
+    procfs_remove_entry(relpath);
+
+    procfs_remove_entry(pid_str);
+
+    // Remove via legacy mechanism
     strcpy(filepath, path);
     strcat(filepath, "/status");
     vfs_delete(filepath);
-    
+
     strcpy(filepath, path);
     strcat(filepath, "/stack");
     vfs_delete(filepath);
-    
+
     strcpy(filepath, path);
     strcat(filepath, "/bytecode");
     vfs_delete(filepath);
-    
+
     vfs_rmdir(path);
 }
 

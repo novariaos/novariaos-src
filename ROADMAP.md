@@ -1,7 +1,10 @@
 # Roadmap for NovariaOS 0.2.0
 
 ## High Priority
-- [X] Refactor internal shell
+- [x] Refactor internal shell
+- [x] VFS Refactoring for Mountable Filesystems
+- [x] Block Device Abstraction Layer
+- [x] Endianness conversion utilities (le16/le32/le64, be16/be32/be64)
 - [ ] Memory manager rework:
     - [X] Buddy
         - [X] Buddy allocation
@@ -12,6 +15,12 @@
     - [ ] Kstd allocations (WIP: current stage — )
         - [ ] kmalloc
         - [ ] kfree
+- [ ] EXT2 Filesystem Driver (Initial support)
+    - [x] Superblock and Group Descriptor Table parsing
+    - [x] Bitmap management & Resource allocation (#14)
+    - [x] Inode and Directory entry management (#14)
+    - [ ] Basic Read/Write operations
+- [ ] FAT32 Filesystem Driver (Initial support)
 
 ## Medium Priority
 - [ ] /dev/tty (WIP: current stage — write only)
