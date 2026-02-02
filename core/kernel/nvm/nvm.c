@@ -13,6 +13,7 @@ nvm_process_t processes[MAX_PROCESSES];
 uint8_t current_process = 0;
 uint32_t timer_ticks = 0;
 
+static instruction_handler_t instruction_table[256] = {NULL};
 int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc);
 
 void nvm_init() {
@@ -25,6 +26,7 @@ void nvm_init() {
         processes[i].fp = -1;
     }
 
+    nvm_init_instruction_table();
     kprint(":: NVM initialized\n", 7);
 }
 
@@ -160,637 +162,8 @@ bool nvm_execute_instruction(nvm_process_t* proc) {
     
     uint8_t opcode = proc->bytecode[proc->ip++];
     
-    switch(opcode) {
-        // Basic:
-        case 0x00: // HALT
-            proc->active = false;
-            proc->exit_code = 0;
-            LOG_DEBUG("process %d: Halted\n", proc->pid);
-            return false;
-        
-        case 0x01: // NOP
-            break;
-            
-        case 0x02: // PUSH
-            if(proc->ip + 3 < proc->size) {
-                uint32_t value = (proc->bytecode[proc->ip] << 24) |
-                                (proc->bytecode[proc->ip + 1] << 16) |
-                                (proc->bytecode[proc->ip + 2] << 8) |
-                                proc->bytecode[proc->ip + 3];
-                proc->ip += 4;
-                
-                if(proc->sp < STACK_SIZE) {
-                    proc->stack[proc->sp++] = (int32_t)value;
-                    
-                    // TODO: switch to core/kernel/log.h features
-                    /* char dbg[64];
-                    serial_print("DEBUG PUSH32: value=0x");
-                    itoa(value, dbg, 16);
-                    serial_print(dbg);
-                    serial_print(" (");
-                    itoa((int32_t)value, dbg, 10);
-                    serial_print(dbg);
-                    serial_print(") at ip=");
-                    itoa(proc->ip, dbg, 10);
-                    serial_print(dbg);
-                    serial_print("\n"); */
-
-                } else {
-                    LOG_WARN("process %d: Stack overflow in PUSH32\n", proc->pid);
-                    proc->exit_code = -1;
-                    proc->active = false;
-                    return false;
-                }
-            } else {
-                LOG_WARN("process %d: Not enough bytes\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            break;
-
-        case 0x04: // POP
-            if(proc->sp > 0) {
-                proc->sp--;
-            } else {
-                LOG_WARN("process %d: Stack underflow in POP\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            break;
-
-        case 0x05: // DUP
-            if(proc->sp == 0) {
-                LOG_WARN("process %d: Stack underflow in DUP\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            if(proc->sp >= STACK_SIZE) {
-                LOG_WARN("process %d: Stack overflow in DUP\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            
-            proc->stack[proc->sp] = proc->stack[proc->sp - 1];
-            proc->sp++;
-            break;
-        
-        case 0x06: // SWAP
-            if(proc->sp >= 2) {
-                int32_t top = proc->stack[proc->sp - 1];
-                int32_t second = proc->stack[proc->sp - 2];
-                proc->stack[proc->sp - 2] = top;
-                proc->stack[proc->sp - 1] = second;
-            } else {
-                LOG_WARN("process %d: Stack underflow in SWAP\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            break;
-
-        // Arithmetic:
-        case 0x10: // ADD
-            if(proc->sp >= 2) {
-                int32_t top = proc->stack[proc->sp - 1];
-                int32_t second = proc->stack[proc->sp - 2];
-                int32_t result = top + second; 
-                
-                proc->stack[proc->sp - 2] = result;
-                proc->sp--;
-            } else {
-                LOG_WARN("process %d: Stack underflow in ADD\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            break;
-
-        case 0x11: // SUB
-            if(proc->sp >= 2) {
-                int32_t top = proc->stack[proc->sp - 1];
-                int32_t second = proc->stack[proc->sp - 2];
-                int32_t result = second - top;
-                
-                proc->stack[proc->sp - 2] = result;
-                proc->sp--;
-            } else {
-                LOG_WARN("process %d: Stack underflow in SUB\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            break;
-
-        case 0x12: // MUL
-            if(proc->sp >= 2) {
-                int32_t top = proc->stack[proc->sp - 1];
-                int32_t second = proc->stack[proc->sp - 2];
-                int32_t result = second * top;
-                
-                proc->stack[proc->sp - 2] = result;
-                proc->sp--;
-            } else {
-                LOG_WARN("process %d: Stack underflow in MUL\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            break;
-
-        case 0x13: // DIV
-            if(proc->sp >= 2) {
-                int32_t top = proc->stack[proc->sp - 1];
-                int32_t second = proc->stack[proc->sp - 2];
-                int32_t result;
-
-                if(top != 0) {
-                    result = second / top;
-                    proc->stack[proc->sp - 2] = result;
-                    proc->sp--;
-                } else {
-                    LOG_WARN("process %d: Zero division DIV. Terminate process. \n", proc->pid);
-                    proc->exit_code = -1;
-                    proc->active = false;
-                    return false;
-                }
-            } else {
-                LOG_WARN("process %d: Stack underflow in DIV\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            break;
-
-        case 0x14: // MOD
-            if(proc->sp >= 2) {
-                int32_t top = proc->stack[proc->sp - 1];
-                int32_t second = proc->stack[proc->sp - 2];
-                
-                if (top == 0) {
-                    LOG_WARN("process %d: Zero division MOD. Terminate process. \n", proc->pid);
-                    proc->exit_code = -1;
-                    proc->active = false;
-                    return false;
-                }
-
-                int32_t result = second % top;
-                
-                proc->stack[proc->sp - 2] = result;
-                proc->sp--;
-            } else {
-                LOG_WARN("process %d: Stack underflow in MOD\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            break;
-        
-        // Comparisons:
-        case 0x20: // CMP
-            if(proc->sp >= 2) {
-                int32_t top = proc->stack[proc->sp - 1];
-                int32_t second = proc->stack[proc->sp - 2];
-                int32_t result;
-
-                if(second < top) {
-                    result = -1;
-                } else if (top == second) {
-                    result = 0;
-                } else {
-                    result = 1;
-                }
-                
-                proc->stack[proc->sp - 2] = result;
-                proc->sp--;
-            } else {
-                LOG_WARN("process %d: Stack underflow in CMP\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            break;
-
-        case 0x21: // EQ
-            if(proc->sp >= 2) {
-                int32_t top = proc->stack[proc->sp - 1];
-                int32_t second = proc->stack[proc->sp - 2];
-                int32_t result = (top == second) ? 1 : 0;
-                
-                proc->stack[proc->sp - 2] = result;
-                proc->sp--;
-            } else {
-                LOG_WARN("process %d: Stack underflow in EQ\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            break;
-
-        case 0x22: // NEQ
-            if(proc->sp >= 2) {
-                int32_t top = proc->stack[proc->sp - 1];
-                int32_t second = proc->stack[proc->sp - 2];
-                int32_t result = (top != second) ? 1 : 0;
-                
-                proc->stack[proc->sp - 2] = result;
-                proc->sp--;
-            } else {
-                LOG_WARN("process %d: Stack underflow in NEQ\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            break;
-
-        case 0x23: // GT
-            if(proc->sp >= 2) {
-                int32_t top = proc->stack[proc->sp - 1];
-                int32_t second = proc->stack[proc->sp - 2];
-                int32_t result = (second > top) ? 1 : 0;
-                
-                proc->stack[proc->sp - 2] = result;
-                proc->sp--;
-            } else {
-                LOG_WARN("process %d: Stack underflow in GT\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            break;
-
-        case 0x24: // LT
-            if(proc->sp >= 2) {
-                int32_t top = proc->stack[proc->sp - 1];
-                int32_t second = proc->stack[proc->sp - 2];
-                int32_t result = (second < top) ? 1 : 0;
-                
-                proc->stack[proc->sp - 2] = result;
-                proc->sp--;
-            } else {
-                LOG_WARN("process %d: Stack underflow in LT\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            break;
-
-        // Flow control (32-bit addresses):
-        case 0x30: // JMP
-            if(proc->ip + 3 < proc->size) {
-                uint32_t addr = (proc->bytecode[proc->ip] << 24) |
-                               (proc->bytecode[proc->ip + 1] << 16) |
-                               (proc->bytecode[proc->ip + 2] << 8) |
-                               proc->bytecode[proc->ip + 3];
-                proc->ip += 4;
-                
-                if(addr >= 4 && addr < proc->size) {
-                    proc->ip = addr;
-                } else {
-                    LOG_WARN("process %d: Invalid address for JMP32\n", proc->pid);
-                    proc->exit_code = -1;
-                    proc->active = false;
-                    return false;
-                }
-            }
-            break;
-
-        case 0x31: // JZ
-            if (proc->sp > 0) {
-                int32_t value = proc->stack[--proc->sp];
-                if (proc->ip + 3 < proc->size) {
-                    uint32_t addr = (proc->bytecode[proc->ip] << 24) |
-                                   (proc->bytecode[proc->ip + 1] << 16) |
-                                   (proc->bytecode[proc->ip + 2] << 8) |
-                                   proc->bytecode[proc->ip + 3];
-                    proc->ip += 4;
-                    
-                    if (value == 0) {
-                        if (addr >= 4 && addr < proc->size) {
-                            proc->ip = addr;
-                        } else {
-                            LOG_WARN("process %d: Invalid address for JZ32\n", proc->pid);
-                            proc->exit_code = -1;
-                            proc->active = false;
-                            return false;
-                        }
-                    }
-                } else {
-                    LOG_WARN("process %d: Not enough bytes for address JZ32\n", proc->pid);
-                    proc->exit_code = -1;
-                    proc->active = false;
-                    return false;
-                }
-            } else {
-                LOG_WARN("process %d: Stack underflow in JZ32\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            break;
-
-        case 0x32: // JNZ
-            if (proc->sp > 0) {
-                int32_t value = proc->stack[--proc->sp];
-                if (proc->ip + 3 < proc->size) {
-                    uint32_t addr = (proc->bytecode[proc->ip] << 24) |
-                                   (proc->bytecode[proc->ip + 1] << 16) |
-                                   (proc->bytecode[proc->ip + 2] << 8) |
-                                   proc->bytecode[proc->ip + 3];
-                    proc->ip += 4;
-                    
-                    if (value != 0) {
-                        if (addr >= 4 && addr < proc->size) {
-                            proc->ip = addr;
-                        } else {
-                            LOG_WARN("process %d: Invalid address for JNZ32\n", proc->pid);
-                            proc->exit_code = -1;
-                            proc->active = false;
-                            return false;
-                        }
-                    }
-                } else {
-                    LOG_WARN("process %d: Not enough bytes for address JNZ32\n", proc->pid);
-                    proc->exit_code = -1;
-                    proc->active = false;
-                    return false;
-                }
-            } else {
-                LOG_WARN("process %d: Stack underflow in JNZ32\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            break;
-
-        case 0x33: // CALL
-            if(proc->ip + 3 < proc->size) {
-                uint32_t addr = (proc->bytecode[proc->ip] << 24) |
-                               (proc->bytecode[proc->ip + 1] << 16) |
-                               (proc->bytecode[proc->ip + 2] << 8) |
-                               proc->bytecode[proc->ip + 3];
-                proc->ip += 4;
-                
-                if(proc->sp < STACK_SIZE - 1) {
-                    proc->stack[proc->sp++] = proc->ip;
-                    
-                    if(addr >= 4 && addr < proc->size) {
-                        proc->ip = addr;
-                    } else {
-                        LOG_WARN("process %d: Invalid address for CALLZ32\n", proc->pid);
-                        proc->exit_code = -1;
-                        proc->active = false;
-                        return false;
-                    }
-                } else {
-                    LOG_WARN("process %d: Stack overflow in CALL32\n", proc->pid);
-                    proc->exit_code = -1;
-                    proc->active = false;
-                    return false;
-                }
-            } else {
-                LOG_WARN("process %d: Not enough bytes for address CALL32\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            break;
-
-        case 0x34: // RET
-            if(proc->sp > 0) {
-                uint32_t return_addr = (uint32_t)proc->stack[--proc->sp];
-                
-                if(return_addr >= 4 && return_addr < proc->size) {
-                    proc->ip = return_addr;
-                } else {
-                    LOG_WARN("process %d: invalid return address\n", proc->pid);
-                    proc->exit_code = -1;
-                    proc->active = false;
-                    return false;
-                }
-            } else {
-                LOG_WARN("process %d: stack underflow in RET\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            break;
-
-        // Stack frames:
-        case 0x35: { // ENTER locals_count (uint8)
-            if (proc->ip < proc->size) {
-                uint8_t locals = proc->bytecode[proc->ip++];
-                // Need space: save fp (1) + locals
-                if (proc->sp + 1 + locals <= STACK_SIZE) {
-                    // push old fp
-                    proc->stack[proc->sp++] = proc->fp;
-                    // set new fp to index of saved fp
-                    proc->fp = proc->sp - 1;
-                    // allocate locals (initialize to 0)
-                    for (uint8_t i = 0; i < locals; i++) {
-                        proc->stack[proc->sp++] = 0;
-                    }
-                } else {
-                    LOG_WARN("process %d: Stack overflow in ENTER\n", proc->pid);
-                    proc->exit_code = -1;
-                    proc->active = false;
-                    return false;
-                }
-            } else {
-                LOG_WARN("process %d: Not enough bytes for ENTER\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            break;
-        }
-        case 0x36: { // LEAVE
-            if (proc->fp < 0 || proc->fp >= STACK_SIZE) {
-                LOG_WARN("process %d: Invalid frame pointer in LEAVE\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            // locals are any items above saved fp index
-            if (proc->sp < proc->fp + 1) {
-                LOG_WARN("process %d: Corrupted stack/frame in LEAVE\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-            // Drop locals
-            proc->sp = proc->fp + 1;
-            // Restore old fp
-            int32_t saved_fp = proc->stack[proc->fp];
-            // Pop saved fp
-            proc->sp = proc->fp; // remove saved fp slot
-            // Now restore fp value
-            proc->fp = saved_fp;
-            break;
-        }
-        case 0x42: { // LOAD_REL offset
-            if (proc->ip < proc->size) {
-                uint8_t off = proc->bytecode[proc->ip++];
-                if (proc->fp < 0) {
-                    LOG_WARN("process %d: LOAD_REL without frame\n", proc->pid);
-                    proc->exit_code = -1;
-                    proc->active = false;
-                    return false;
-                }
-                int32_t idx = proc->fp + 1 + off;
-                if (idx >= 0 && idx < proc->sp && proc->sp < STACK_SIZE) {
-                    proc->stack[proc->sp++] = proc->stack[idx];
-                } else {
-                    LOG_WARN("process %d: Invalid index in LOAD_REL\n", proc->pid);
-                    proc->exit_code = -1;
-                    proc->active = false;
-                }
-            }
-            break;
-        }
-        case 0x43: { // STORE_REL offset
-            if (proc->ip < proc->size) {
-                uint8_t off = proc->bytecode[proc->ip++];
-                if (proc->fp < 0) {
-                    LOG_WARN("process %d: STORE_REL without frame\n", proc->pid);
-                    proc->exit_code = -1;
-                    proc->active = false;
-                    return false;
-                }
-                int32_t idx = proc->fp + 1 + off;
-                if (idx >= 0 && idx < STACK_SIZE && proc->sp > 0) {
-                    int32_t value = proc->stack[--proc->sp];
-                    proc->stack[idx] = value;
-                }
-            }
-            break;
-        }
-
-        // Arguments access:
-        case 0x37: { // LOAD_ARG offset
-            if (proc->ip < proc->size) {
-                uint8_t off = proc->bytecode[proc->ip++];
-                if (proc->fp <= 0) { // need at least return_addr at fp-1
-                    LOG_WARN("process %d: LOAD_ARG without valid frame\n", proc->pid);
-                    proc->exit_code = -1;
-                    proc->active = false;
-                    return false;
-                }
-                int32_t idx = (proc->fp - 2) - (int32_t)off; // arg0 at fp-2, arg1 at fp-3, ...
-                if (idx >= 0 && idx < proc->sp && proc->sp < STACK_SIZE) {
-                    proc->stack[proc->sp++] = proc->stack[idx];
-                }
-            }
-            break;
-        }
-        case 0x38: { // STORE_ARG offset
-            if (proc->ip < proc->size) {
-                uint8_t off = proc->bytecode[proc->ip++];
-                if (proc->fp <= 0) {
-                    LOG_WARN("process %d: STORE_ARG without valid frame\n", proc->pid);
-                    proc->exit_code = -1;
-                    proc->active = false;
-                    return false;
-                }
-                int32_t idx = (proc->fp - 2) - (int32_t)off;
-                if (idx >= 0 && idx < STACK_SIZE && proc->sp > 0) {
-                    int32_t value = proc->stack[--proc->sp];
-                    proc->stack[idx] = value;
-                }
-            }
-            break;
-        }
-
-        // Memory:
-        case 0x40: // LOAD
-            if(proc->ip < proc->size) {
-                uint8_t var_index = proc->bytecode[proc->ip++];
-                
-                if(var_index < MAX_LOCALS) {
-                    int32_t value = proc->locals[var_index];
-                    
-                    if(proc->sp < STACK_SIZE) {
-                        proc->stack[proc->sp++] = value;
-                    }
-                }
-            }
-            break;
-
-        case 0x41: // STORE
-            if(proc->ip < proc->size) {
-                uint8_t var_index = proc->bytecode[proc->ip++];
-                
-                if(var_index < MAX_LOCALS && proc->sp > 0) {
-                    int32_t value = proc->stack[--proc->sp];
-                    proc->locals[var_index] = value;
-                }
-            }
-            break;
-
-        // Memory absolute access:
-        case 0x44: // LOAD_ABS - load from absolute memory address
-            if (!caps_has_capability(proc, CAP_DRV_ACCESS)) {
-                LOG_WARN("process %d: Required caps not received\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-
-            if(proc->sp > 0) {
-                uint32_t addr = (uint32_t)proc->stack[proc->sp - 1]; // get address from stack
-
-                if((addr >= 0x100000 && addr < 0xFFFFFFFF) || 
-                (addr >= 0xB8000 && addr <= 0xB8FA0)) {
-                    int32_t value = *(int32_t*)addr;
-                    proc->stack[proc->sp - 1] = value;
-                }
-            }
-            break;
-
-        case 0x45: // STORE_ABS - store to absolute memory address
-            if (!caps_has_capability(proc, CAP_DRV_ACCESS)) {
-                LOG_WARN("process %d: Required caps not received\n", proc->pid);
-                proc->exit_code = -1;
-                proc->active = false;
-                return false;
-            }
-
-            if(proc->sp >= 2) {
-                uint32_t addr = (uint32_t)proc->stack[proc->sp - 2]; // address
-                int32_t value = proc->stack[proc->sp - 1]; // value
-
-                if((addr >= 0x100000 && addr < 0xFFFFFFFF) || 
-                (addr >= 0xB8000 && addr <= 0xB8FA0)) {
-                    // Special handling for VGA text buffer - write only 16 bits (char + attribute)
-                    if (addr >= 0xB8000 && addr <= 0xB8FA0) {
-                        *(uint16_t*)addr = (uint16_t)(value & 0xFFFF);
-                    } else {
-                        *(int32_t*)addr = value;
-                    }
-                    proc->sp -= 2;
-                }
-            }
-            break;
-
-        // System calls:
-        case 0x51: // BREAK
-            LOG_DEBUG("process %d: Stop from BREAK\n", proc->pid);
-            break;
-            
-        case 0x50: // SYSCALL
-            if(proc->ip < proc->size) {
-                uint8_t syscall_id = proc->bytecode[proc->ip++];
-                syscall_handler(syscall_id, proc);
-            }
-            break;
-            
-        default:
-            proc->exit_code = -1;
-            proc->active = false;
-            return false;
+    if(instruction_table[opcode] != NULL) {
+        return instruction_table[opcode](proc);
     }
     
     return true;
@@ -862,4 +235,50 @@ bool nvm_is_process_active(uint8_t pid) {
         return processes[pid].active;
     }
     return false;
+}
+
+void nvm_init_instruction_table(void) {
+    for(int i = 0; i < 256; i++) {
+        instruction_table[i] = NULL;
+    }
+    
+    instruction_table[0x00] = handle_halt;
+    instruction_table[0x01] = handle_nop;
+    instruction_table[0x02] = handle_push;
+    instruction_table[0x04] = handle_pop;
+    instruction_table[0x05] = handle_dup;
+    instruction_table[0x06] = handle_swap;
+    
+    instruction_table[0x10] = handle_add;
+    instruction_table[0x11] = handle_sub;
+    instruction_table[0x12] = handle_mul;
+    instruction_table[0x13] = handle_div;
+    instruction_table[0x14] = handle_mod;
+    
+    instruction_table[0x20] = handle_cmp;
+    instruction_table[0x21] = handle_eq;
+    instruction_table[0x22] = handle_neq;
+    instruction_table[0x23] = handle_gt;
+    instruction_table[0x24] = handle_lt;
+    
+    instruction_table[0x30] = handle_jmp;
+    instruction_table[0x31] = handle_jz;
+    instruction_table[0x32] = handle_jnz;
+    instruction_table[0x33] = handle_call;
+    instruction_table[0x34] = handle_ret;
+    
+    instruction_table[0x35] = handle_enter;
+    instruction_table[0x36] = handle_leave;
+    instruction_table[0x37] = handle_load_arg;
+    instruction_table[0x38] = handle_store_arg;
+    
+    instruction_table[0x40] = handle_load;
+    instruction_table[0x41] = handle_store;
+    instruction_table[0x42] = handle_load_rel;
+    instruction_table[0x43] = handle_store_rel;
+    instruction_table[0x44] = handle_load_abs;
+    instruction_table[0x45] = handle_store_abs;
+    
+    instruction_table[0x50] = handle_syscall;
+    instruction_table[0x51] = handle_break;
 }

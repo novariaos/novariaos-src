@@ -5,3 +5,4 @@ rootfs/bin/
 *.log
 compile_commands.json
 apps/
+*.ignore

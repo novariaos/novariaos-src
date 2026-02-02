@@ -33,8 +33,11 @@ targets:
         core/kernel/mem/allocator, core/kernel/vge/fb, core/kernel/vge/fb_render, core/drivers/serial, core/drivers/timer, core/drivers/keyboard,
         core/fs/ramfs, core/fs/initramfs, core/fs/vfs, core/fs/procfs, core/arch/cpuid, core/fs/iso9660, core/fs/devfs, core/fs/block,
         core/fs/block_dev_vfs, core/fs/bitmap, core/fs/inode, core/fs/dirent, core/arch/entropy, core/crypto/chacha20, core/crypto/chacha20_rng,
-        core/drivers/cdrom, core/kernel/nvm/nvm, core/kernel/nvm/syscalls, core/kernel/shell, core/kernel/vge/psf, core/kernel/userspace,
-        rootfs/usr/src/userspace_init, rootfs/usr/src/echo, rootfs/usr/src/clear, rootfs/usr/src/rm, rootfs/usr/src/write, rootfs/usr/src/nova, rootfs/usr/src/uname]
+        core/drivers/cdrom, core/kernel/shell, core/kernel/vge/psf,
+        core/kernel/nvm/nvm, core/kernel/nvm/instructions/arithmetic, core/kernel/nvm/instructions/stack, core/kernel/nvm/instructions/flowcontrol,
+        core/kernel/nvm/instructions/memory, core/kernel/nvm/instructions/system, core/kernel/nvm/syscalls,
+        core/kernel/userspace, rootfs/usr/src/userspace_init, rootfs/usr/src/echo, rootfs/usr/src/clear, rootfs/usr/src/rm,
+        rootfs/usr/src/write, rootfs/usr/src/nova, rootfs/usr/src/uname]
     cmds:
       - "mkdir -p ${BUILD_DIR}/boot"
       - "${LD} ${LDFLAGS} -o ${BUILD_DIR}/boot/${@} $(echo ${^} | xargs | cut -d ' ' -f2- | xargs printf -- '${OBJ_DIR}/%s.o\\n' | xargs)"
@@ -71,6 +74,31 @@ targets:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
   core/kernel/nvm/nvm:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
+  core/kernel/nvm/instructions/arithmetic:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
+  core/kernel/nvm/instructions/stack:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
+  core/kernel/nvm/instructions/flowcontrol:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
+  core/kernel/nvm/instructions/memory:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
+  core/kernel/nvm/instructions/system:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"

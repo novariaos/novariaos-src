@@ -1,3 +1,4 @@
+#include <core/kernel/nvm/instructions.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -46,5 +47,7 @@ void nvm_scheduler_tick();
 bool nvm_is_process_active(uint8_t pid);
 int32_t nvm_get_exit_code(uint8_t pid);
 nvm_process_t* nvm_get_process(uint8_t pid);
+
+typedef bool (*instruction_handler_t)(nvm_process_t* proc);
 
 #endif
