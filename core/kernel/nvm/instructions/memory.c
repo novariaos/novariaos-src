@@ -80,7 +80,7 @@ bool handle_load_abs(nvm_process_t* proc) {
     }
 
     if(proc->sp > 0) {
-        uint32_t addr = (uint32_t)proc->stack[proc->sp - 1];
+        uintptr_t addr = (uintptr_t)proc->stack[proc->sp - 1];
         
         if((addr >= 0x100000 && addr < 0xFFFFFFFF) || 
         (addr >= 0xB8000 && addr <= 0xB8FA0)) {
@@ -100,7 +100,7 @@ bool handle_store_abs(nvm_process_t* proc) {
     }
 
     if(proc->sp >= 2) {
-        uint32_t addr = (uint32_t)proc->stack[proc->sp - 2];
+        uintptr_t addr = (uintptr_t)proc->stack[proc->sp - 2];
         int32_t value = proc->stack[proc->sp - 1];
 
         if((addr >= 0x100000 && addr < 0xFFFFFFFF) || 

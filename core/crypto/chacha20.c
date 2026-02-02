@@ -64,11 +64,8 @@ static void chacha20_init_block(struct chacha20_context *ctx, int8_t key[], int8
 }
 
 static void chacha20_block_set_counter(struct chacha20_context *ctx, int counter) {
-    int32_t counter_low = (int32_t)counter;
-    int32_t counter_high = (int32_t)(counter >> 32);
-    
-    ctx->state[12] = counter_low;
-    ctx->state[13] = pack4(ctx->nonce + 0) + counter_high;
+    ctx->state[12] = counter;
+    ctx->state[13] = pack4(ctx->nonce + 0);
 }
 
 static void chacha20_block_next(struct chacha20_context *ctx) {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include <core/crypto/chacha20_rng.h>
+#include <stdint.h>
 
 static int32_t rotl32(int32_t x, int n) {
     return (x << n) | (x >> (32 - n));
@@ -38,9 +39,9 @@ static void chacha20_init_block(struct chacha20_rng *rng, int8_t key[], int8_t n
     rng->state[15] = pack4(nonce + 8);
 }
 
-static void chacha20_block_set_counter(struct chacha20_rng *rng, int counter) {
-    rng->state[12] = (int32_t)counter;
-    rng->state[13] = pack4(rng->nonce) + (int32_t)(counter >> 32);
+static void chacha20_block_set_counter(struct chacha20_rng *rng, uint64_t counter) {
+    rng->state[12] = (int32_t)counter;                 // Младшие 32 бита
+    rng->state[13] = pack4(rng->nonce) + (int32_t)(counter >> 32); // Старшие 32 бита
 }
 
 static void chacha20_block_next(struct chacha20_rng *rng) {
@@ -91,9 +92,11 @@ static void chacha20_block_next(struct chacha20_rng *rng) {
     
     for(int i = 0; i < 16; i++) rng->keystream32[i] = x[i] + rng->state[i];
     
-    int32_t *counter = &rng->state[12];
-    counter[0]++;
-    if(counter[0] == 0) counter[1]++;
+    // Инкремент 64-битного счетчика, хранящегося в state[12] и state[13]
+    uint64_t counter = ((uint64_t)rng->state[13] << 32) | (uint32_t)rng->state[12];
+    counter++;
+    rng->state[12] = (int32_t)counter;               // Младшие 32 бита
+    rng->state[13] = (int32_t)(counter >> 32);       // Старшие 32 бита
 }
 
 void chacha20_rng_init(struct chacha20_rng *rng, uint64_t seed) {
@@ -124,10 +127,10 @@ int32_t chacha20_rng_next32(struct chacha20_rng *rng) {
     return result;
 }
 
-int chacha20_rng_next64(struct chacha20_rng *rng) {
-    int high = chacha20_rng_next32(rng);
-    int low = chacha20_rng_next32(rng);
-    return (high << 32) | low;
+uint64_t chacha20_rng_next64(struct chacha20_rng *rng) {
+    uint32_t high = (uint32_t)chacha20_rng_next32(rng);
+    uint32_t low = (uint32_t)chacha20_rng_next32(rng);
+    return ((uint64_t)high << 32) | low;
 }
 
 void chacha20_rng_bytes(struct chacha20_rng *rng, int8_t *buffer, int32_t size) {

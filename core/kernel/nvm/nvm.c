@@ -14,21 +14,6 @@ uint8_t current_process = 0;
 uint32_t timer_ticks = 0;
 
 static instruction_handler_t instruction_table[256] = {NULL};
-int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc);
-
-void nvm_init() {
-    for(int i = 0; i < MAX_PROCESSES; i++) {
-        processes[i].active = false;
-        processes[i].sp = 0;
-        processes[i].ip = 0;
-        processes[i].exit_code = 0;
-        processes[i].caps_count = 0;
-        processes[i].fp = -1;
-    }
-
-    nvm_init_instruction_table();
-    kprint(":: NVM initialized\n", 7);
-}
 
 // Signature checking and process creation
 int nvm_create_process(uint8_t* bytecode, uint32_t size, uint16_t initial_caps[], uint8_t caps_count) {
@@ -281,4 +266,19 @@ void nvm_init_instruction_table(void) {
     
     instruction_table[0x50] = handle_syscall;
     instruction_table[0x51] = handle_break;
+}
+
+
+void nvm_init() {
+    for(int i = 0; i < MAX_PROCESSES; i++) {
+        processes[i].active = false;
+        processes[i].sp = 0;
+        processes[i].ip = 0;
+        processes[i].exit_code = 0;
+        processes[i].caps_count = 0;
+        processes[i].fp = -1;
+    }
+
+    nvm_init_instruction_table();
+    kprint(":: NVM initialized\n", 7);
 }

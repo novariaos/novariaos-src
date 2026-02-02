@@ -296,7 +296,7 @@ void newline(void) {
     }
 }
 
-void putchar(char c, int color) {
+void fb_putchar(char c, int color) {
     init_fb();
 
     if (c == '\n') {
@@ -347,7 +347,7 @@ void vgaprint(const char *str, int color) {
     }
 
     while (*str) {
-        putchar(*str, fb_color);
+        fb_putchar(*str, fb_color);
         str++;
     }
 }

@@ -1,6 +1,7 @@
 #ifndef SYSCALL_H
 #define SYSCALL_H
 
+#include <core/kernel/nvm/nvm.h>
 #include <stdint.h>
 
 #define SYS_EXIT            0x00
@@ -18,5 +19,7 @@
 #define SYS_PORT_IN_BYTE    0x0C
 #define SYS_PORT_OUT_BYTE   0x0D
 #define SYS_PRINT           0x0E
+
+int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc);
 
 #endif
