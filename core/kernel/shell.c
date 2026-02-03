@@ -487,27 +487,51 @@ void shell_init(void) {
 }
 
 void shell_run(void) {
-    char command[MAX_COMMAND_LENGTH];
-    
+    static char command[MAX_COMMAND_LENGTH];
+    static int cmd_idx = 0;
+    bool needs_prompt = true;
+
+    for (int j = 0; j < MAX_COMMAND_LENGTH; j++) command[j] = 0;
+
     while (1) {
         nvm_scheduler_tick();
-        
-        if (should_delay_prompt) {
-            if (delay_ticks > 0) {
-                delay_ticks--;
-                continue;
-            } else {
-                should_delay_prompt = 0;
+
+        if (needs_prompt) {
+            if (should_delay_prompt) {
+                if (delay_ticks > 0) {
+                    delay_ticks--;
+                    continue;
+                } else {
+                    should_delay_prompt = 0;
+                }
+            }
+            kprint("(host)-[", 7);
+            kprint(current_working_directory, 2);
+            kprint("] ", 7);
+            kprint("# ", 2);
+            needs_prompt = false;
+        }
+
+        char c = keyboard_get_char(); 
+        if (c != 0) {
+            if (c == '\n') {
+                kprint("\n", 7);
+                command[cmd_idx] = '\0';
+                execute_command(command);
+                cmd_idx = 0;
+                for (int j = 0; j < MAX_COMMAND_LENGTH; j++) command[j] = 0;
+                needs_prompt = true;
+            } else if (c == '\b') {
+                if (cmd_idx > 0) {
+                    cmd_idx--;
+                    command[cmd_idx] = '\0';
+                    kprint("\b \b", 7);
+                }
+            } else if (cmd_idx < MAX_COMMAND_LENGTH - 1) {
+                command[cmd_idx++] = c;
+                char s[2] = {c, 0};
+                kprint(s, 15);
             }
         }
-        
-        kprint("(host)-[", 7);
-        kprint(current_working_directory, 2);
-        kprint("] ", 7);
-        kprint("# ", 2);
-        
-        keyboard_getline(command, MAX_COMMAND_LENGTH);
-        
-        execute_command(command);
     }
 }
