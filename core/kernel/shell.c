@@ -512,7 +512,7 @@ void shell_run(void) {
             needs_prompt = false;
         }
 
-        char c = keyboard_get_char(); 
+        char c = keyboard_getchar(); 
         if (c != 0) {
             if (c == '\n') {
                 kprint("\n", 7);
