@@ -37,11 +37,11 @@ targets:
             core/kernel/mem/buddy,  core/kernel/mem/allocator,
 
             core/kernel/vge/fb, core/kernel/vge/fb_render, core/kernel/vge/psf,
-            
+
             core/drivers/serial, core/drivers/timer, core/drivers/keyboard, core/drivers/cdrom,
 
             core/fs/ramfs, core/fs/initramfs, core/fs/vfs, core/fs/procfs, core/fs/iso9660, core/fs/devfs,
-            core/fs/block, core/fs/block_dev_vfs, core/fs/bitmap, core/fs/inode, core/fs/dirent,
+            core/fs/block, core/fs/block_dev_vfs, core/fs/bitmap, core/fs/inode, core/fs/dirent, core/fs/fat32,
 
             core/kernel/nvm/nvm, core/kernel/nvm/caps, core/kernel/nvm/instructions/arithmetic,
             core/kernel/nvm/instructions/stack, core/kernel/nvm/instructions/flowcontrol,
@@ -165,7 +165,7 @@ targets:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
-      
+
   core/fs/ramfs:
     deps: []
     cmds:
@@ -180,7 +180,7 @@ targets:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
-      
+
   core/fs/vfs:
     deps: []
     cmds:
@@ -217,6 +217,11 @@ targets:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
   core/fs/dirent:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
+  core/fs/fat32:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
@@ -302,7 +307,7 @@ targets:
     phony: true
     cmds:
       - "${QEMU} -m 1024M -serial file:qemu.log -cdrom dist/build_${DATE}.iso -cpu core2duo"
-  
+
   build-release:
     phony: true
     deps: [prepare, kernel.bin]
@@ -314,7 +319,7 @@ targets:
         fi
       - >
         sh -c 'mkdir -p rootfs/etc && echo
-        "NAME=${OS_NAME}\nVERSION=\"${OS_VERSION}\"\nID=${OS_ID}\nANSI_COLOR=\"${OS_COLOR}\"\nPRETTY_NAME=\"${OS_NAME} ${OS_VERSION}-RELEASE\"\nHOME_URL=\"https://novariaos.github.io/\"\nBUG_REPORT_URL=\"https://github.com/novariaos/novariaos-src/issues\"" 
+        "NAME=${OS_NAME}\nVERSION=\"${OS_VERSION}\"\nID=${OS_ID}\nANSI_COLOR=\"${OS_COLOR}\"\nPRETTY_NAME=\"${OS_NAME} ${OS_VERSION}-RELEASE\"\nHOME_URL=\"https://novariaos.github.io/\"\nBUG_REPORT_URL=\"https://github.com/novariaos/novariaos-src/issues\""
         > rootfs/etc/os-release'
       - "xorriso -as mkisofs -quiet -iso-level 3 -o ${BUILD_DIR}/boot/rootfs.img rootfs/"
       - "xorriso -as mkisofs -b limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table --protective-msdos-label -iso-level 3 -partition_offset 64 -quiet -o dist/${OS_NAME}-${OS_VERSION}-${OS_STAGE}-amd64-memstick.iso ${BUILD_DIR}/boot/"
