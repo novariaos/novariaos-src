@@ -6,6 +6,7 @@
 #include <core/kernel/nvm/caps.h>
 #include <core/drivers/serial.h>
 #include <core/kernel/vge/fb.h>
+#include <core/kernel/vge/palette.h>
 #include <core/drivers/timer.h>
 #include <core/drivers/keyboard.h>
 #include <core/drivers/cdrom.h>
@@ -121,6 +122,7 @@ void kmain() {
         vfs_list();
  
         init_vge_font();
+        palette_init();
         clear_screen();
     } else {
         LOG_DEBUG(":: ISO9660 filesystem not found\n");
@@ -187,10 +189,7 @@ void kmain() {
                 nvm_execute((uint8_t*)prog->data, prog->size, (uint16_t[]){CAP_ALL}, 1);
             }
         }
-    } else {
-        kprint(":: No programs found in initramfs\n", 14);
     }
-
     shell_init();
     shell_run();
 

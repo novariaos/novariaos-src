@@ -6,11 +6,9 @@
 #include <core/arch/io.h>
 #include <core/kernel/nvm/nvm.h>
 
-// Keyboard data port and status port
 #define KEYBOARD_DATA_PORT    0x60
 #define KEYBOARD_STATUS_PORT  0x64
 
-// Circular buffer for keyboard input
 static char keyboard_buffer[KEYBOARD_BUFFER_SIZE];
 static volatile int buffer_read_pos = 0;
 static volatile int buffer_write_pos = 0;
@@ -24,7 +22,6 @@ static const char scancode_to_ascii[] = {
     '*',  0,   ' '
 };
 
-// Shifted characters
 static const char scancode_to_ascii_shifted[] = {
     0,   27,  '!', '@', '#',  '$', '%', '^', '&', '*', '(', ')', '_',  '+', '\b',
     '\t', 'Q', 'W', 'E', 'R',  'T', 'Y', 'U', 'I', 'O', 'P', '{', '}',  '\n',
@@ -37,7 +34,6 @@ static bool shift_pressed = false;
 static bool caps_lock = false;
 static bool ctrl_pressed = false;
 
-// Add a character to the buffer
 static void keyboard_buffer_push(char c) {
     int next_pos = (buffer_write_pos + 1) % KEYBOARD_BUFFER_SIZE;
     if (next_pos != buffer_read_pos) {
@@ -46,7 +42,6 @@ static void keyboard_buffer_push(char c) {
     }
 }
 
-// Read a character from the buffer
 static char keyboard_buffer_pop(void) {
     if (buffer_read_pos == buffer_write_pos) {
         return 0; // Buffer is empty
@@ -56,7 +51,6 @@ static char keyboard_buffer_pop(void) {
     return c;
 }
 
-// Handle keyboard scancode (polling mode)
 void keyboard_handler(void) {
     int8_t scancode = inb(KEYBOARD_DATA_PORT);
 
@@ -121,7 +115,6 @@ void keyboard_handler(void) {
     }
 }
 
-// Poll the keyboard (since we don't have interrupts set up yet)
 static void keyboard_poll(void) {
     int8_t status = inb(KEYBOARD_STATUS_PORT);
     if (status & 0x01) { // Check if data is available
@@ -129,7 +122,6 @@ static void keyboard_poll(void) {
     }
 }
 
-// Initialize the keyboard
 void keyboard_init(void) {
     buffer_read_pos = 0;
     buffer_write_pos = 0;
@@ -138,23 +130,19 @@ void keyboard_init(void) {
     ctrl_pressed = false;
 }
 
-// Check if a character is available
 bool keyboard_has_char(void) {
     keyboard_poll();
     return buffer_read_pos != buffer_write_pos;
 }
 
-// Read a character (blocking)
 char keyboard_getchar(void) {    
     while (!keyboard_has_char()) {
         keyboard_poll();
-        // Run NVM scheduler while waiting for input
         nvm_scheduler_tick();
     }
     return keyboard_buffer_pop();
 }
 
-// Read a line of input
 void keyboard_getline(char* buffer, int max_length) {
     int pos = 0;
 

@@ -525,12 +525,14 @@ void shell_run(void) {
                 if (cmd_idx > 0) {
                     cmd_idx--;
                     command[cmd_idx] = '\0';
-                    kprint("\b \b", 7);
+                    vga_backspace();
                 }
-            } else if (cmd_idx < MAX_COMMAND_LENGTH - 1) {
-                command[cmd_idx++] = c;
-                char s[2] = {c, 0};
-                kprint(s, 15);
+            } else if (c >= 32 && c <= 126) {
+                if (cmd_idx < MAX_COMMAND_LENGTH - 1) {
+                    command[cmd_idx++] = c;
+                    char s[2] = {c, 0};
+                    kprint(s, 15);
+                }
             }
         }
     }

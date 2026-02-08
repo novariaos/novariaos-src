@@ -3,6 +3,7 @@
 #include <core/kernel/log.h>
 #include <core/kernel/kstd.h>
 #include <core/kernel/vge/fb_render.h>
+#include <core/kernel/vge/palette.h>
 #include <lib/bootloader/limine.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -324,27 +325,7 @@ void fb_putchar(char c, int color) {
 void vgaprint(const char *str, int color) {
     init_fb();
 
-    uint32_t fb_color;
-
-    switch (color & 0xF) {
-        case 0:  fb_color = 0x00101010; break; // black
-        case 1:  fb_color = 0x003b5bdb; break; // blue
-        case 2:  fb_color = 0x0031a354; break; // green
-        case 3:  fb_color = 0x0030a0a0; break; // cyan
-        case 4:  fb_color = 0x00c34043; break; // red
-        case 5:  fb_color = 0x007b3fb2; break; // magenta
-        case 6:  fb_color = 0x00b58900; break; // brown / yellow
-        case 7:  fb_color = 0x00c0c0c0; break; // light gray
-
-        case 8:  fb_color = 0x00505050; break; // dark gray
-        case 9:  fb_color = 0x006a8cff; break; // bright blue
-        case 10: fb_color = 0x0057d18b; break; // bright green
-        case 11: fb_color = 0x005fd7d7; break; // bright cyan
-        case 12: fb_color = 0x00ff6b6b; break; // bright red
-        case 13: fb_color = 0x00c77dff; break; // bright magenta
-        case 14: fb_color = 0x00ffd866; break; // bright yellow
-        case 15: fb_color = 0x00f2f2f2; break; // white
-    }
+    uint32_t fb_color = palette_get_color(color);
 
     while (*str) {
         fb_putchar(*str, fb_color);

@@ -29,6 +29,7 @@
 ## Medium Priority
 - [ ] /dev/tty (WIP: current stage — write only)
 - [ ] Poor /sys/pci (vendor/device without interrupts)
+- [ ] Support eBPF kernel modules
 
 ## Low Priority 
 - [ ] Shell's removal from the kernel

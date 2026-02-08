@@ -36,7 +36,7 @@ targets:
 
             core/kernel/mem/buddy,  core/kernel/mem/allocator,
 
-            core/kernel/vge/fb, core/kernel/vge/fb_render, core/kernel/vge/psf,
+            core/kernel/vge/fb, core/kernel/vge/fb_render, core/kernel/vge/psf, core/kernel/vge/palette,
 
             core/drivers/serial, core/drivers/timer, core/drivers/keyboard, core/drivers/cdrom,
 
@@ -137,6 +137,11 @@ targets:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
   core/kernel/vge/psf:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
+  core/kernel/vge/palette:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"

@@ -431,6 +431,7 @@ void procfs_init(void) {
     vfs_pseudo_register("/proc/meminfo", procfs_meminfo, NULL, NULL, NULL, NULL);
     vfs_pseudo_register("/proc/pci", procfs_pci, NULL, NULL, NULL, NULL);
     vfs_pseudo_register("/proc/uptime", procfs_uptime, NULL, NULL, NULL, NULL);
+    vfs_pseudo_register("/proc/version", procfs_version, NULL, NULL, NULL, NULL);
 
     cpuinfo_init();
 }
@@ -586,6 +587,24 @@ vfs_ssize_t procfs_pci(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos
 
 vfs_ssize_t procfs_uptime(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos) {
     return 0;
+}
+
+vfs_ssize_t procfs_version(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos) {
+    const char* version_str = "n300326";
+    size_t len = strlen(version_str);
+
+    if (*pos >= len) {
+        return 0;
+    }
+
+    size_t remaining = len - *pos;
+    size_t to_copy = (remaining < count) ? remaining : count;
+
+    memcpy(buf, version_str + *pos, to_copy);
+
+    *pos += to_copy;
+
+    return to_copy;
 }
 
 int parse_frequency_mhz(const char* str) {
