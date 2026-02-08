@@ -21,7 +21,7 @@
     - [x] Inode and Directory entry management (#14)
     - [ ] Basic Read/Write operations
 - [ ] FAT32 Filesystem Driver (Initial support)
-    - [ ] Boot sector and FAT parsing
+    - [x] Boot sector and FAT parsing
     - [ ] Cluster chain management
     - [ ] Directory entry reading
     - [ ] Basic Read/Write operations
