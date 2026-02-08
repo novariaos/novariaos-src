@@ -41,7 +41,7 @@ targets:
             core/drivers/serial, core/drivers/timer, core/drivers/keyboard, core/drivers/cdrom,
 
             core/fs/ramfs, core/fs/initramfs, core/fs/vfs, core/fs/procfs, core/fs/iso9660, core/fs/devfs,
-            core/fs/block, core/fs/block_dev_vfs, core/fs/bitmap, core/fs/inode, core/fs/dirent,
+            core/fs/block, core/fs/block_dev_vfs, core/fs/bitmap, core/fs/inode, core/fs/dirent, core/fs/fat32,
 
             core/kernel/nvm/nvm, core/kernel/nvm/caps, core/kernel/nvm/instructions/arithmetic,
             core/kernel/nvm/instructions/stack, core/kernel/nvm/instructions/flowcontrol,
@@ -222,6 +222,11 @@ targets:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
   core/fs/dirent:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
+  core/fs/fat32:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"

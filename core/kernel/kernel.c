@@ -18,6 +18,7 @@
 #include <core/fs/vfs.h>
 #include <core/fs/block_dev_vfs.h>
 #include <core/fs/block.h>
+#include <core/fs/fat32.h>
 #include <rootfs/usr/src/userspace_init.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -70,6 +71,7 @@ void kmain() {
     ramfs_init();
     vfs_init();
     block_init();
+    fat32_init();
     syslog_init();
     keyboard_init();
     
