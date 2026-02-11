@@ -6,6 +6,7 @@
 
 void memory_manager_init(void);
 void* kmalloc(size_t size);
+void* krealloc(void* ptr, size_t new_size);
 void kfree(void* ptr);
 size_t get_memory_total(void);
 size_t get_memory_free(void);
