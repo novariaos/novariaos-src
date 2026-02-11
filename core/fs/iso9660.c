@@ -226,7 +226,7 @@ void iso9660_mount_to_vfs(const char* mount_point, const char* iso_path) {
         return;
     }
 
-    extern int vfs_create(const char* filename, const char* data, size_t size);
+    extern int vfs_create_static(const char* filename, const char* data, size_t size);
     extern int vfs_mkdir(const char* dirname);
 
     size_t dir_size;
@@ -279,8 +279,8 @@ void iso9660_mount_to_vfs(const char* mount_point, const char* iso_path) {
             mount_dir_recursive(vfs_path, entry->extent_le, entry->size_le);
         } else {
             const uint8_t* file_data = read_block(entry->extent_le);
-            if (file_data && entry->size_le <= MAX_FILE_SIZE) {
-                vfs_create(vfs_path, (const char*)file_data, entry->size_le);
+            if (file_data) {
+                vfs_create_static(vfs_path, (const char*)file_data, entry->size_le);
             }
         }
 
@@ -289,7 +289,7 @@ void iso9660_mount_to_vfs(const char* mount_point, const char* iso_path) {
 }
 
 static void mount_dir_recursive(const char* mount_point, uint32_t dir_extent, uint32_t dir_size) {
-    extern int vfs_create(const char* filename, const char* data, size_t size);
+    extern int vfs_create_static(const char* filename, const char* data, size_t size);
     extern int vfs_mkdir(const char* dirname);
 
     const uint8_t* dir_data = read_block(dir_extent);
@@ -333,8 +333,8 @@ static void mount_dir_recursive(const char* mount_point, uint32_t dir_extent, ui
             mount_dir_recursive(vfs_path, entry->extent_le, entry->size_le);
         } else {
             const uint8_t* file_data = read_block(entry->extent_le);
-            if (file_data && entry->size_le <= MAX_FILE_SIZE) {
-                vfs_create(vfs_path, (const char*)file_data, entry->size_le);
+            if (file_data) {
+                vfs_create_static(vfs_path, (const char*)file_data, entry->size_le);
             }
         }
 
