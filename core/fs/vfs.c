@@ -169,7 +169,8 @@ void vfs_init(void) {
         files[i].used = false;
         files[i].size = 0;
         files[i].name[0] = '\0';
-        files[i].data[0] = '\0';
+        files[i].data = NULL;
+        files[i].owns_data = false;
         files[i].type = VFS_TYPE_FILE;
         files[i].ops.read = NULL;
         files[i].ops.write = NULL;
@@ -261,6 +262,41 @@ int vfs_mkdir(const char* dirname) {
     return -3;
 }
 
+int vfs_create_static(const char* filename, const char* data, size_t size) {
+    if (strlen(filename) >= MAX_FILENAME) {
+        return -1;
+    }
+
+    for (int i = 0; i < MAX_FILES; i++) {
+        if (files[i].used && strcmp(files[i].name, filename) == 0) {
+            if (files[i].type == VFS_TYPE_DIR) {
+                return -4;
+            }
+            if (files[i].owns_data && files[i].data) {
+                kfree(files[i].data);
+            }
+            files[i].data = (char*)data;
+            files[i].size = size;
+            files[i].owns_data = false;
+            return i;
+        }
+    }
+
+    for (int i = 0; i < MAX_FILES; i++) {
+        if (!files[i].used) {
+            strcpy(files[i].name, filename);
+            files[i].data = (char*)data;
+            files[i].size = size;
+            files[i].used = true;
+            files[i].owns_data = false;
+            files[i].type = VFS_TYPE_FILE;
+            return i;
+        }
+    }
+
+    return -3;
+}
+
 int vfs_create(const char* filename, const char* data, size_t size) {
     if (strlen(filename) >= MAX_FILENAME) {
         return -1;
@@ -275,8 +311,14 @@ int vfs_create(const char* filename, const char* data, size_t size) {
             if (files[i].type == VFS_TYPE_DIR) {
                 return -4;
             }
+            if (files[i].owns_data && files[i].data) {
+                kfree(files[i].data);
+            }
+            files[i].data = kmalloc(size);
+            if (!files[i].data && size > 0) return -ENOMEM;
             memcpy(files[i].data, data, size);
             files[i].size = size;
+            files[i].owns_data = true;
             return i;
         }
     }
@@ -284,9 +326,12 @@ int vfs_create(const char* filename, const char* data, size_t size) {
     for (int i = 0; i < MAX_FILES; i++) {
         if (!files[i].used) {
             strcpy(files[i].name, filename);
+            files[i].data = kmalloc(size);
+            if (!files[i].data && size > 0) return -ENOMEM;
             memcpy(files[i].data, data, size);
             files[i].size = size;
             files[i].used = true;
+            files[i].owns_data = true;
             files[i].type = VFS_TYPE_FILE;
             return i;
         }
@@ -355,11 +400,11 @@ const char* vfs_read(const char* filename, size_t* size) {
     }
     
     if (file->type == VFS_TYPE_DEVICE) {
-        static char dev_buffer[MAX_FILE_SIZE];
+        static char dev_buffer[65536];
         if (file->ops.read) {
             vfs_off_t pos = 0;
             vfs_ssize_t bytes = file->ops.read(file, dev_buffer, 
-                                              MAX_FILE_SIZE, &pos);
+                                              65536, &pos);
             if (bytes > 0) {
                 if (size) *size = bytes;
                 dev_buffer[bytes] = '\0';
@@ -464,18 +509,30 @@ vfs_ssize_t vfs_writefd(int fd, const void* buf, size_t count) {
         return file->ops.write(file, buf, count, &handle->position);
     }
     
-    if (handle->position + count > MAX_FILE_SIZE) {
-        count = MAX_FILE_SIZE - handle->position;
+    if (handle->position + count > file->size) {
+        if (handle->position + count > MAX_FILE_SIZE) {
+            count = MAX_FILE_SIZE - handle->position;
+        }
+
+        if (count == 0) return -ENOSPC;
+
+        if (file->owns_data) {
+            char* new_data = krealloc(file->data, handle->position + count);
+            if (!new_data) return -ENOMEM;
+            file->data = new_data;
+            file->size = handle->position + count;
+        } else {
+            // Static files cannot be expanded
+            if (handle->position + count > file->size) {
+                count = file->size - handle->position;
+            }
+        }
     }
     
     if (count == 0) return -ENOSPC;
     
     memcpy(file->data + handle->position, buf, count);
     handle->position += count;
-    
-    if (handle->position > file->size) {
-        file->size = handle->position;
-    }
     
     return count;
 }
@@ -543,10 +600,14 @@ int vfs_delete(const char* filename) {
                 }
             }
             
+            if (files[i].owns_data && files[i].data) {
+                kfree(files[i].data);
+            }
             files[i].used = false;
             files[i].size = 0;
             files[i].name[0] = '\0';
-            files[i].data[0] = '\0';
+            files[i].data = NULL;
+            files[i].owns_data = false;
             files[i].type = VFS_TYPE_FILE;
             files[i].ops.read = NULL;
             files[i].ops.write = NULL;
@@ -615,10 +676,14 @@ int vfs_rmdir(const char* dirname) {
                     }
                 }
                 
+                if (files[i].owns_data && files[i].data) {
+                    kfree(files[i].data);
+                }
                 files[i].used = false;
                 files[i].size = 0;
                 files[i].name[0] = '\0';
-                files[i].data[0] = '\0';
+                files[i].data = NULL;
+                files[i].owns_data = false;
                 files[i].type = VFS_TYPE_FILE;
                 files[i].ops.read = NULL;
                 files[i].ops.write = NULL;
@@ -639,10 +704,14 @@ int vfs_rmdir(const char* dirname) {
         }
     }
     
+    if (files[dir_idx].owns_data && files[dir_idx].data) {
+        kfree(files[dir_idx].data);
+    }
     files[dir_idx].used = false;
     files[dir_idx].size = 0;
     files[dir_idx].name[0] = '\0';
-    files[dir_idx].data[0] = '\0';
+    files[dir_idx].data = NULL;
+    files[dir_idx].owns_data = false;
     files[dir_idx].type = VFS_TYPE_FILE;
     files[dir_idx].ops.read = NULL;
     files[dir_idx].ops.write = NULL;
