@@ -2,7 +2,7 @@
 <div align="left">
     <img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/z3nnix/NovariaOS?style=flat&label=Stars">
     <img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/z3nnix/NovariaOS?style=flat&label=Commit%20activity">
-    <a href="https://z3nnix.github.io/NovariaOS/docs.html"><img src="https://img.shields.io/badge/Documentation-0377b8"></a>
+    <a href="https://novariaos.github.io/docs.html"><img src="https://img.shields.io/badge/Documentation-0377b8"></a>
     <a href="https://t.me/NovariaOS"><img src="https://img.shields.io/badge/Telegram-0088CC"></a>
 </div>
 
