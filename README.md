@@ -1,39 +1,85 @@
 # NovariaOS
-<div align="left">
-    <img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/z3nnix/NovariaOS?style=flat&label=Stars">
-    <img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/z3nnix/NovariaOS?style=flat&label=Commit%20activity">
-    <a href="https://novariaos.github.io/docs.html"><img src="https://img.shields.io/badge/Documentation-0377b8"></a>
-    <a href="https://t.me/NovariaOS"><img src="https://img.shields.io/badge/Telegram-0088CC"></a>
+<p align="center">
+    <img src="https://img.shields.io/badge/NovariaOS-EXPERIMENTAL-fbb714?style=for-the-badge">
+    <img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/z3nnix/NovariaOS?style=for-the-badge&label=Stars">
+    <img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/z3nnix/NovariaOS?style=for-the-badge&label=Commit%20activity">
+    <a href="https://novariaos.github.io/docs.html"><img src="https://img.shields.io/badge/Documentation-0377b8?style=for-the-badge"></a>
+    <a href="https://t.me/NovariaOS"><img src="https://img.shields.io/badge/Telegram-0088CC?style=for-the-badge"></a>
 </div>
+</p>
 
-> NovariaOS is an experimental operating system whose architecture challenges traditional approaches.
+<p align="center">
+  <img src="meta/screenshots/novaria-fetch.jpg" height=500 alt="NovariaOS booting in QEMU">
+<br>
+  <em>NovariaOS booting on QEMU (x86_64)</em>
+</p>
 
-## Features
+---
 
-*   **NVM (Novaria Virtual Machine):** Safely executes bytecode within an isolated environment.
-*   **CAPS (CAPabilities):** A unique rights management system that controls and manages the permissions of any running process.
+## 📌 Introduction
 
-## Goals
+> [!Warning] 
+> NovariaOS is an experimental research operating system.
+> It is **not stable**, **not secure**, till.
+> 
+> Expect breaking changes. Do not use on production hardware.
 
-By the final release, we aim to create a complete and polished system with the following ecosystem:
+**NovariaOS** is not a Linux distro or fork of something.. It is a **ground-up implementation** of a capability-based operating system with a built-in virtual machine (NVM) for permanently eliminate incompatibility between user software and hardware
+We are not trying to replace anything. We are exploring an alternative path.
 
-*   **A Complete Set of System Utilities (Nutils):** A fully functional and coherent set of core utilities for system management that follows the internal logic of NovariaOS rather than inherited conventions.
-*   **Programming Language Support:**
-    *   A Low-Level Language (e.g., C): For developing system components, drivers, and high-performance applications.
-    *   A High-Level Scripting Language (e.g., Python): For automation, rapid development, and user convenience.
-*   **Network Stack (Optional but Desirable):** A functional network implementation sufficient for local network communication and, potentially, internet access.
-*   **Legendary Stability and Debugging:** The release version must be thoroughly debugged. We strive for a level of stability that will become a hallmark of NovariaOS, inspired by systems like FreeBSD.
-*   **A Distinct Niche and Community:** We envision NovariaOS as a respected niche OS — known in its circles, with dedicated followers who appreciate its uniqueness and use it as their primary system if it perfectly suits their needs. Like FreeBSD, NovariaOS should not be a "replacement for anything," but should move in its own deliberately chosen direction.
+---
 
-## Non-Goals
+## ⚙️ Features
 
-NovariaOS is **not** trying to do these things:
+| Area         | Status      | Notes |
+|--------------|-------------|-------|
+| **x86_64**   | ✅ Boot     | Limine, IDT, Initial setup |
+| **Memory**   | 🟡 Partial  | Buddy+slab(WIP) allocator |
+| **NVM**      | ✅ Work     | Stack machine, 27 opcodes, no JIT |
+| **CAPS**     | ✅ Work     | Capability lists, runtime checks |
+| **Filesystem** | ✅ Work   | In-memory r/w, VFS, iso9660 (planned: ext2 and FAT32) |
+| **Userspace**  | ❌ None   | Planned: Nutils (nsh and basic commands, like busybox) |
 
-*   **Replacing Mainstream OSes:** NovariaOS does not aim to replace Linux, BSD, Windows, macOS, or any other widely used operating system. We are not striving for world domination.
-*   **POSIX Compliance:** We are not a POSIX-compliant operating system. While we may borrow some successful ideas, we are free to design our APIs and system behaviors as we see fit for our architecture.
-*   **Following Trends for Trends' Sake:** We will not blindly adopt every new technological fad if it does not align with the project's long-term goals and architecture.
-*   **Complete Rejection of Heritage:** We are not "mad scientists" seeking to reinvent absolutely everything. We respect OS history and will use proven concepts when they are the best solution.
+---
 
-## Contribute
+## 🚧 Limitations (aka "We know")
 
-If you would like to contribute to NovariaOS, please feel free to open an issue or make a pull request.
+- No SMP (single core only for now)
+- No userspace yet (shell and basic utils built-in the kernel) — yes, we know it's bad. 
+- No networking
+- NVM is not JIT-compiled, interpretation is slow
+- CAPS is not integrated yet (every program run with CAP_ALL)
+
+---
+
+## 📊 "Benchmarks"
+
+| Test | Result | Note |
+|------|--------|------|
+| Boot time (QEMU) | ~0.3s | From Limine to kmain |
+| NVM 10⁹ adds | 2.4s | Interpreted, no optimizations |
+| Panics triggered | 10<sup>100</sup> | In last 30 days |
+
+---
+
+## 💬 Community
+
+We have a [Telegram channel](https://t.me/NovariaOS).  
+We don't bite. We discuss stupid ideas, breaking changes, and occasionally working code.
+
+If you want to contribute:
+- Open an issue
+- Fork and hack
+- Ask questions in Telegram first — we'll help you not to waste time
+
+---
+
+## 📜 License
+
+GPL-3.0 — because sharing is caring.
+
+---
+
+## 🕯️ Nostalgia
+
+*In memory of the OSdev scene of the early 2000s — We are still here. We still write assembly. We still triple-fault for fun.*
