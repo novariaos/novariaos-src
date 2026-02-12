@@ -43,6 +43,8 @@ targets:
             core/fs/ramfs, core/fs/initramfs, core/fs/vfs, core/fs/procfs, core/fs/iso9660, core/fs/devfs,
             core/fs/block, core/fs/block_dev_vfs, core/fs/bitmap, core/fs/inode, core/fs/dirent, core/fs/fat32,
 
+            core/kernel/elf/parser, core/kernel/kmodules,
+
             core/kernel/nvm/nvm, core/kernel/nvm/caps, core/kernel/nvm/instructions/arithmetic,
             core/kernel/nvm/instructions/stack, core/kernel/nvm/instructions/flowcontrol,
             core/kernel/nvm/instructions/memory, core/kernel/nvm/instructions/system, core/kernel/nvm/syscalls,
@@ -82,6 +84,16 @@ targets:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
   core/kernel/mem/allocator:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
+  core/kernel/elf/parser:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
+  core/kernel/kmodules:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"

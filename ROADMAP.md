@@ -5,6 +5,7 @@
 - [x] VFS Refactoring for Mountable Filesystems
 - [x] Block Device Abstraction Layer
 - [x] Endianness conversion utilities (le16/le32/le64, be16/be32/be64)
+- [x] Support kernel modules
 - [ ] Memory manager rework:
     - [X] Buddy
         - [X] Buddy allocation
@@ -29,7 +30,6 @@
 ## Medium Priority
 - [ ] /dev/tty (WIP: current stage — write only)
 - [ ] Poor /sys/pci (vendor/device without interrupts)
-- [ ] Support eBPF kernel modules
 
 ## Low Priority 
 - [ ] Shell's removal from the kernel

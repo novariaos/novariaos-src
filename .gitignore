@@ -1,8 +1,18 @@
-build/
-dist/
-rootfs/bin/
+# Build and output directories
+/build/
+/dist/
+/rootfs/bin/
 .cache/
+
+# Logs
 *.log
+
+# Development tools
 compile_commands.json
-apps/
+
+# Binary and kernel modules
+*.ko
+*.bin
+
+# Ignore markers
 *.ignore

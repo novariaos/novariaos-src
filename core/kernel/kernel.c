@@ -23,6 +23,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <lib/bootloader/limine.h>
+#include <core/kernel/elf.h>
 
 static volatile struct limine_module_request module_request = {
     .id = { LIMINE_COMMON_MAGIC, 0x3e7e279702be32af, 0xca1c4f3bd1280cee },
@@ -190,6 +191,27 @@ void kmain() {
             }
         }
     }
+
+    vfs_dirent_t entries[32];
+    int num = vfs_readdir("/boot/modules", entries, 32);
+    if (num > 0) {
+        char path[256];
+        for (int i = 0; i < num; i++) {
+            const char* name = entries[i].d_name;
+            size_t len = strlen(name);
+            if (len > 3 && strcmp(name + len - 3, ".ko") == 0) {
+                char* p = path;
+                const char* base = "/boot/modules/";
+                while (*base) *p++ = *base++;
+                const char* n = name;
+                while (*n) *p++ = *n++;
+                *p = '\0';
+                
+                kmodule_load(path);
+            }
+        }
+    }
+
     shell_init();
     shell_run();
 
