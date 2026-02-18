@@ -1,5 +1,4 @@
 #include <stddef.h>
-#include <string.h>
 #include <core/kernel/mem.h>
 #include <core/fs/vfs.h>
 #include <core/arch/io.h>

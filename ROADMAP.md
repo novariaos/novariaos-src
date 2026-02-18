@@ -23,7 +23,7 @@
     - [ ] Basic Read/Write operations
 - [ ] FAT32 Filesystem Driver (Initial support)
     - [x] Boot sector and FAT parsing
-    - [ ] Cluster chain management
+    - [x] Cluster chain management
     - [ ] Directory entry reading
     - [ ] Basic Read/Write operations
 

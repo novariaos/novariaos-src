@@ -55,8 +55,45 @@ typedef struct {
     uint32_t total_clusters;
 } fat32_fs_t;
 
+// FAT32 special cluster values
+#define FAT32_MASK      0x0FFFFFFF
+#define FAT32_FREE      0x00000000
+#define FAT32_BAD       0x0FFFFFF7
+#define FAT32_EOC_MIN   0x0FFFFFF8
+#define FAT32_EOC       0x0FFFFFFF
+
+static inline bool fat32_is_eoc(uint32_t entry) {
+    return (entry & FAT32_MASK) >= FAT32_EOC_MIN;
+}
+
+static inline bool fat32_is_free(uint32_t entry) {
+    return (entry & FAT32_MASK) == FAT32_FREE;
+}
+
+static inline bool fat32_is_bad(uint32_t entry) {
+    return (entry & FAT32_MASK) == FAT32_BAD;
+}
+
+// Initialization and mount
 void fat32_init(void);
 int fat32_mount(vfs_mount_t* mnt, const char* device, void* data);
 int fat32_unmount(vfs_mount_t* mnt);
 
+// FAT table operations
+int fat32_read_fat_entry(fat32_fs_t* fs, uint32_t cluster, uint32_t* out_entry);
+int fat32_write_fat_entry(fat32_fs_t* fs, uint32_t cluster, uint32_t value);
+
+// Cluster chain traversal
+int fat32_get_cluster_chain(fat32_fs_t* fs, uint32_t start_cluster,
+                            uint32_t* chain, size_t max_len, size_t* out_len);
+
+// Cluster allocation and deallocation
+int fat32_alloc_cluster(fat32_fs_t* fs, uint32_t* out_cluster);
+int fat32_extend_chain(fat32_fs_t* fs, uint32_t last_cluster, uint32_t* out_new);
+int fat32_free_chain(fat32_fs_t* fs, uint32_t start_cluster);
+
+// Cluster I/O
+uint32_t fat32_cluster_to_sector(fat32_fs_t* fs, uint32_t cluster);
+int fat32_read_cluster(fat32_fs_t* fs, uint32_t cluster, void* buffer);
+int fat32_write_cluster(fat32_fs_t* fs, uint32_t cluster, const void* buffer);
 #endif
