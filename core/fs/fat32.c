@@ -486,7 +486,10 @@ int fat32_read_dir(fat32_fs_t* fs, uint32_t dir_cluster,
             // Determine name
             if (have_lfn && lfn_len > 0) {
                 // Validate checksum
-                uint8_t expected = fat32_lfn_checksum((const uint8_t*)de->name);
+                uint8_t name83[11];
+                memcpy(name83, de->name, 8);
+                memcpy(name83 + 8, de->ext, 3);
+                uint8_t expected = fat32_lfn_checksum(name83);
                 if (expected == lfn_chksum) {
                     // Use LFN
                     lfn_buf[lfn_len] = '\0';
