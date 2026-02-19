@@ -4,22 +4,18 @@
 #include <core/kernel/log.h>
 #include <core/fs/vfs.h>
 #include <core/kernel/vge/fb_render.h>
+#include <core/drivers/keyboard.h>
 
 struct kernel_api {
     void (*kprint)(const char *str, int color);
     int (*vfs_pseudo_register)(const char* filename, vfs_dev_read_t read_fn, vfs_dev_write_t write_fn, vfs_dev_seek_t seek_fn, vfs_dev_ioctl_t ioctl_fn, void* dev_data);
     void* (*kmalloc)(size_t size);
     void (*kfree)(void* ptr);
-    void (*clear_screen)(void);
-    void (*set_cursor_pos)(uint32_t x, uint32_t y);
-    void (*set_bg_color)(uint32_t color);
-    void (*set_fg_color)(uint32_t color);
-    void (*vga_backspace)(void);
-    uint32_t (*get_screen_width_chars)(void);
-    uint32_t (*get_screen_height_chars)(void);
-    void (*draw_rect)(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color);
-    void (*draw_line)(uint32_t x1, uint32_t y1, uint32_t x2, uint32_t y2, uint32_t color);
-    void (*get_cursor_pos)(uint32_t *x, uint32_t *y);
+    int (*keyboard_register_hotkey)(int scancode, int modifiers, void (*callback)(void*), void* data);
+    void (*keyboard_unregister_hotkey)(int id);
+    void* (*get_framebuffer)(void);
+    void (*get_fb_dimensions)(uint32_t* width, uint32_t* height, uint32_t* pitch);
+    uint32_t (*get_fb_pitch_pixels)(void);
 };
 
 int kmodule_load(const char* path) {
@@ -116,17 +112,12 @@ int kmodule_load(const char* path) {
     api.vfs_pseudo_register = vfs_pseudo_register;
     api.kmalloc = kmalloc;
     api.kfree = kfree;
-    api.clear_screen = clear_screen;
-    api.set_cursor_pos = set_cursor_pos;
-    api.set_bg_color = set_bg_color;
-    api.set_fg_color = set_fg_color;
-    api.vga_backspace = vga_backspace;
-    api.get_screen_width_chars = get_screen_width_chars;
-    api.get_screen_height_chars = get_screen_height_chars;
-    api.draw_rect = draw_rect;
-    api.draw_line = draw_line;
-    api.get_cursor_pos = get_cursor_pos;
-    
+    api.keyboard_register_hotkey = keyboard_register_hotkey;
+    api.keyboard_unregister_hotkey = keyboard_unregister_hotkey;
+    api.get_framebuffer = get_framebuffer;
+    api.get_fb_dimensions = get_fb_dimensions;
+    api.get_fb_pitch_pixels = get_fb_pitch_pixels;
+
     void (*module_entry)(struct kernel_api*) __attribute__((force_align_arg_pointer));
     module_entry = (void*)entry_point;
     
