@@ -13,6 +13,7 @@ compile_commands.json
 # Binary and kernel modules
 *.ko
 *.bin
+*.img
 
 # Ignore markers
 *.ignore

@@ -24,7 +24,7 @@
 - [ ] FAT32 Filesystem Driver (Initial support)
     - [x] Boot sector and FAT parsing
     - [x] Cluster chain management
-    - [ ] Directory entry reading
+    - [x] Directory entry reading
     - [ ] Basic Read/Write operations
 
 ## Medium Priority

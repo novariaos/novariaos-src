@@ -74,6 +74,71 @@ static inline bool fat32_is_bad(uint32_t entry) {
     return (entry & FAT32_MASK) == FAT32_BAD;
 }
 
+// --- Directory entry structures ---
+
+// FAT32 8.3 directory entry (32 bytes)
+typedef struct {
+    char     name[8];           // Short filename (space-padded)
+    char     ext[3];            // Extension (space-padded)
+    uint8_t  attr;              // File attributes
+    uint8_t  nt_reserved;       // Reserved for Windows NT
+    uint8_t  crt_time_tenth;    // Creation time, tenths of a second
+    uint16_t crt_time;          // Creation time
+    uint16_t crt_date;          // Creation date
+    uint16_t acc_date;          // Last access date
+    uint16_t fst_clus_hi;       // High 16 bits of first cluster
+    uint16_t wrt_time;          // Last write time
+    uint16_t wrt_date;          // Last write date
+    uint16_t fst_clus_lo;       // Low 16 bits of first cluster
+    uint32_t file_size;         // File size in bytes
+} __attribute__((packed)) fat32_dir_entry_t;
+
+// FAT32 Long File Name entry (32 bytes, same size as dir entry)
+typedef struct {
+    uint8_t  order;             // Sequence number (ORed with 0x40 for last entry)
+    uint16_t name1[5];          // First 5 UTF-16LE characters
+    uint8_t  attr;              // Always ATTR_LONG_NAME (0x0F)
+    uint8_t  type;              // Always 0
+    uint8_t  checksum;          // Checksum of the 8.3 name
+    uint16_t name2[6];          // Next 6 UTF-16LE characters
+    uint16_t fst_clus_lo;       // Always 0
+    uint16_t name3[2];          // Last 2 UTF-16LE characters
+} __attribute__((packed)) fat32_lfn_entry_t;
+
+// File attribute bits
+#define FAT_ATTR_READ_ONLY  0x01
+#define FAT_ATTR_HIDDEN     0x02
+#define FAT_ATTR_SYSTEM     0x04
+#define FAT_ATTR_VOLUME_ID  0x08
+#define FAT_ATTR_DIRECTORY  0x10
+#define FAT_ATTR_ARCHIVE    0x20
+#define FAT_ATTR_LONG_NAME  (FAT_ATTR_READ_ONLY | FAT_ATTR_HIDDEN | \
+                             FAT_ATTR_SYSTEM | FAT_ATTR_VOLUME_ID)
+#define FAT_ATTR_LONG_NAME_MASK (FAT_ATTR_READ_ONLY | FAT_ATTR_HIDDEN | \
+                                  FAT_ATTR_SYSTEM | FAT_ATTR_VOLUME_ID | \
+                                  FAT_ATTR_DIRECTORY | FAT_ATTR_ARCHIVE)
+
+// Special first-byte values for directory entries
+#define FAT_ENTRY_FREE      0xE5    // Entry is free (deleted)
+#define FAT_ENTRY_END       0x00    // No more entries follow
+#define FAT_ENTRY_DOT       0x2E    // '.' entry
+
+// LFN sequence number flags
+#define FAT_LFN_LAST        0x40    // This is the last (highest order) LFN entry
+#define FAT_LFN_SEQ_MASK    0x3F    // Mask for sequence number
+
+// Max characters in LFN (13 per entry, up to 20 entries = 255 chars + NUL)
+#define FAT_LFN_MAX         256
+
+// Parsed directory entry (internal representation)
+typedef struct {
+    char     name[FAT_LFN_MAX]; // Full filename (LFN if available, else 8.3)
+    uint32_t first_cluster;     // First cluster of the file/directory
+    uint32_t file_size;         // Size in bytes (0 for directories)
+    uint8_t  attr;              // Raw FAT attribute byte
+    bool     is_dir;            // True if this is a directory
+} fat32_entry_t;
+
 // Initialization and mount
 void fat32_init(void);
 int fat32_mount(vfs_mount_t* mnt, const char* device, void* data);
@@ -96,4 +161,49 @@ int fat32_free_chain(fat32_fs_t* fs, uint32_t start_cluster);
 uint32_t fat32_cluster_to_sector(fat32_fs_t* fs, uint32_t cluster);
 int fat32_read_cluster(fat32_fs_t* fs, uint32_t cluster, void* buffer);
 int fat32_write_cluster(fat32_fs_t* fs, uint32_t cluster, const void* buffer);
+
+// --- Directory entry reading ---
+//
+// Read all directory entries from a directory starting at @dir_cluster.
+// Handles both 8.3 short names and Long File Names (LFN). LFN sequences
+// are automatically reconstructed and validated via checksum.
+//
+// @fs:          FAT32 filesystem instance
+// @dir_cluster: First cluster of the directory to read
+// @entries:     Output buffer for parsed entries
+// @max_entries: Maximum number of entries to read
+// @out_count:   Number of entries actually read
+//
+// Returns: 0 on success, negative error code otherwise
+//
+// Note: Includes protection against infinite loops on corrupted FAT chains.
+int fat32_read_dir(fat32_fs_t* fs, uint32_t dir_cluster,
+                   fat32_entry_t* entries, size_t max_entries, size_t* out_count);
+
+// Lookup a directory entry by name within a given directory cluster.
+// Comparison is case-insensitive for ASCII characters (FAT32 convention).
+//
+// @fs:          FAT32 filesystem instance
+// @dir_cluster: First cluster of the directory to search
+// @name:        Entry name to find (supports both 8.3 and LFN)
+// @out:         Output structure filled with entry details on success
+//
+// Returns: 0 and fills *out on success, -ENOENT if not found
+int fat32_lookup(fat32_fs_t* fs, uint32_t dir_cluster,
+                 const char* name, fat32_entry_t* out);
+
+// --- VFS interface ---
+//
+// These functions provide the glue between FAT32 directory operations
+// and the Virtual File System (VFS) layer.
+
+// Read directory contents through VFS interface.
+// Returns the number of entries read, or negative error code.
+int fat32_vfs_readdir(vfs_mount_t* mnt, const char* path,
+                      vfs_dirent_t* entries, size_t max_entries);
+
+// Get file/directory metadata (size, type, timestamps).
+// Returns 0 on success, negative error code otherwise.
+int fat32_vfs_stat(vfs_mount_t* mnt, const char* path, vfs_stat_t* stat);
+
 #endif
