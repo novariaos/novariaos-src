@@ -169,6 +169,28 @@ void* kmalloc(size_t size) {
     return (void*)((uintptr_t)block + sizeof(alloc_info_t));
 }
 
+void* krealloc(void* ptr, size_t new_size) {
+    if (!ptr) return kmalloc(new_size);
+    if (new_size == 0) {
+        kfree(ptr);
+        return NULL;
+    }
+
+    alloc_info_t* info = (alloc_info_t*)((uintptr_t)ptr - sizeof(alloc_info_t));
+    if (info->magic != ALLOC_MAGIC) {
+        panic("krealloc: corrupted allocation info");
+    }
+
+    if (new_size <= info->user_size) return ptr;
+
+    void* new_ptr = kmalloc(new_size);
+    if (!new_ptr) return NULL;
+
+    memcpy(new_ptr, ptr, info->user_size);
+    kfree(ptr);
+    return new_ptr;
+}
+
 void kfree(void* ptr) {
     LOG_TRACE("kfree: freeing ptr=%p\n", ptr);
 

@@ -7,7 +7,7 @@
 #include <core/arch/spinlock.h>
 
 // Configuration constants
-#define BUDDY_MAX_ORDER 20  /**< Maximum allocation order (2^20 = 1MB blocks) */
+#define BUDDY_MAX_ORDER 28  /**< Maximum allocation order (2^28 = 256MB blocks) */
 #define BUDDY_MIN_ORDER 12  /**< Minimum allocation order (2^12 = 4KB blocks) */
 
 #define BUDDY_BLOCK_SIZE(order) (1ULL << (order))
