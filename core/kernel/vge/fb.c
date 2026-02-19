@@ -1,5 +1,5 @@
 #include <stdint.h>
-#include <lib/bootloader/limine.h>
+#include <lib/limine.h>
 #include <stddef.h>
 #include <core/kernel/mem.h>
 #include <core/kernel/kstd.h>

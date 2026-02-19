@@ -2,7 +2,7 @@
 #include <core/kernel/mem/buddy.h>
 #include <core/kernel/kstd.h>
 #include <core/kernel/log.h>
-#include <lib/bootloader/limine.h>
+#include <lib/limine.h>
 #include <core/arch/panic.h>
 #include <stddef.h>
 #include <stdint.h>

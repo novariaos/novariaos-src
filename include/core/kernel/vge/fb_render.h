@@ -18,6 +18,7 @@ void vga_backspace(void);
 void set_cursor_pos(uint32_t x, uint32_t y);
 uint32_t get_screen_width_chars(void);
 uint32_t get_screen_height_chars(void);
+void get_cursor_pos(uint32_t *x, uint32_t *y);
 void draw_rect(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color);
 void draw_line(uint32_t x1, uint32_t y1, uint32_t x2, uint32_t y2, uint32_t color);
 

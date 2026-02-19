@@ -4,7 +4,7 @@
 #include <core/kernel/kstd.h>
 #include <core/kernel/vge/fb_render.h>
 #include <core/kernel/vge/palette.h>
-#include <lib/bootloader/limine.h>
+#include <lib/limine.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -178,8 +178,6 @@ const uint8_t builtin_font[128][8] = {
 };
 
 void init_fb(void) {
-    if (fb_info.initialized) return;
-
     if (fb_request.response == NULL ||
         fb_request.response->framebuffer_count == 0) {
         return;
@@ -192,10 +190,6 @@ void init_fb(void) {
     fb_info.pitch = fb_info.fb->pitch;
     fb_info.pitch_pixels = fb_info.pitch / 4;
 
-    fb_info.scroll_pixels = fb_info.char_height * fb_info.pitch_pixels;
-    fb_info.remaining_pixels = (fb_info.height - fb_info.char_height) * fb_info.pitch_pixels;
-    fb_info.clear_area_start = fb_info.fb_addr + fb_info.remaining_pixels;
-
     fb_info.char_width = 8;
     fb_info.char_height = 16;
 
@@ -205,19 +199,21 @@ void init_fb(void) {
     fb_info.cursor_x = 0;
     fb_info.cursor_y = 0;
 
-    fb_info.initialized = true;
-
     fb_info.scroll_bytes = fb_info.char_height * fb_info.pitch;
     fb_info.screen_bytes = fb_info.height * fb_info.pitch;
     fb_info.remaining_bytes = fb_info.screen_bytes - fb_info.scroll_bytes;
     fb_info.scroll_pixels = fb_info.char_height * fb_info.pitch_pixels;
-    fb_info.clear_area_start = fb_info.fb_addr + 
+    fb_info.clear_area_start = fb_info.fb_addr +
                                (fb_info.remaining_bytes / sizeof(uint32_t));
+    fb_info.clear_words = fb_info.scroll_bytes / sizeof(uint32_t);
+
+    fb_info.initialized = true;
 
     clear_screen();
 }
 
 static void put_pixel(uint32_t x, uint32_t y, uint32_t color) {
+    if (!fb_info.initialized) return;
     if (x >= fb_info.width || y >= fb_info.height) return;
 
     uint32_t *pixel = &fb_info.fb_addr[y * fb_info.pitch_pixels + x];
@@ -225,6 +221,7 @@ static void put_pixel(uint32_t x, uint32_t y, uint32_t color) {
 }
 
 static void draw_char(uint32_t x, uint32_t y, char c, uint32_t color) {
+    if (!fb_info.initialized) return;
     if (c < 0 || c >= 128) return;
 
     const uint8_t *glyph = system_font[(int)c];
@@ -245,7 +242,7 @@ static void draw_char(uint32_t x, uint32_t y, char c, uint32_t color) {
 }
 
 void clear_screen(void) {
-    init_fb();
+    if (!fb_info.initialized) return;
 
     for (uint32_t y = 0; y < fb_info.height; y++) {
         for (uint32_t x = 0; x < fb_info.width; x++) {
@@ -258,7 +255,7 @@ void clear_screen(void) {
 }
 
 void newline(void) {
-    init_fb();
+    if (!fb_info.initialized) return;
 
     uint32_t char_height = fb_info.char_height;
     uint32_t pitch_pixels = fb_info.pitch_pixels;
@@ -269,28 +266,25 @@ void newline(void) {
     fb_info.cursor_y += char_height;
 
     if (fb_info.cursor_y + char_height > fb_info.height) {
-        size_t scroll_bytes = char_height * fb_info.pitch;
-        size_t remaining_bytes = (fb_info.height - char_height) * fb_info.pitch;
-
-        uint8_t *src = (uint8_t*)fb_addr + scroll_bytes;
+        uint8_t *src = (uint8_t*)fb_addr + fb_info.scroll_bytes;
         uint8_t *dst = (uint8_t*)fb_addr;
 
-        memmove(dst, src, remaining_bytes);
+        memmove(dst, src, fb_info.remaining_bytes);
 
-        uint8_t *clear_start = (uint8_t*)fb_addr + remaining_bytes;
-        uint8_t *bg_color_bytes = (uint8_t*)&bg_color;
-
+        uint8_t *clear_start = (uint8_t*)fb_addr + fb_info.remaining_bytes;
         uint32_t *clear_start_32 = (uint32_t*)clear_start;
-        size_t clear_words = scroll_bytes / sizeof(uint32_t);
 
-        for (size_t i = 0; i < clear_words; i++) {
+        for (size_t i = 0; i < fb_info.clear_words; i++) {
             clear_start_32[i] = bg_color;
         }
 
-        uint8_t *remaining_bytes_ptr = (uint8_t*)(clear_start_32 + clear_words);
-        size_t remaining_count = scroll_bytes % sizeof(uint32_t);
-        for (size_t i = 0; i < remaining_count; i++) {
-            remaining_bytes_ptr[i] = bg_color_bytes[i % sizeof(uint32_t)];
+        size_t remainder = fb_info.scroll_bytes % sizeof(uint32_t);
+        if (remainder) {
+            uint8_t *bg_bytes = (uint8_t*)&bg_color;
+            uint8_t *rem_ptr = (uint8_t*)(clear_start_32 + fb_info.clear_words);
+            for (size_t i = 0; i < remainder; i++) {
+                rem_ptr[i] = bg_bytes[i % sizeof(uint32_t)];
+            }
         }
         
         fb_info.cursor_y = fb_info.height - char_height;
@@ -298,7 +292,7 @@ void newline(void) {
 }
 
 void fb_putchar(char c, int color) {
-    init_fb();
+    if (!fb_info.initialized) return;
 
     if (c == '\n') {
         newline();
@@ -315,7 +309,6 @@ void fb_putchar(char c, int color) {
     }
 
     uint32_t y_offset = (fb_info.char_height - system_font_height) / 2;
-    if (y_offset < 0) y_offset = 0;
 
     draw_char(fb_info.cursor_x, fb_info.cursor_y + y_offset, c, color);
 
@@ -323,7 +316,7 @@ void fb_putchar(char c, int color) {
 }
 
 void vgaprint(const char *str, int color) {
-    init_fb();
+    if (!fb_info.initialized) return;
 
     uint32_t fb_color = palette_get_color(color);
 
@@ -334,15 +327,17 @@ void vgaprint(const char *str, int color) {
 }
 
 void set_bg_color(uint32_t color) {
+    if (!fb_info.initialized) return;
     fb_info.bg_color = color;
 }
 
 void set_fg_color(uint32_t color) {
+    if (!fb_info.initialized) return;
     fb_info.fg_color = color;
 }
 
 void vga_backspace(void) {
-    init_fb();
+    if (!fb_info.initialized) return;
 
     if (fb_info.cursor_x == 0) {
         return;
@@ -351,14 +346,13 @@ void vga_backspace(void) {
     fb_info.cursor_x -= fb_info.char_width;
 
     uint32_t y_offset = (fb_info.char_height - system_font_height) / 2;
-    if (y_offset < 0) y_offset = 0;
 
     draw_rect(fb_info.cursor_x, fb_info.cursor_y + y_offset,
               fb_info.char_width, system_font_height, fb_info.bg_color);
 }
 
 void set_cursor_pos(uint32_t x, uint32_t y) {
-    init_fb();
+    if (!fb_info.initialized) return;
 
     fb_info.cursor_x = x * fb_info.char_width;
     fb_info.cursor_y = y * fb_info.char_height;
@@ -368,17 +362,17 @@ void set_cursor_pos(uint32_t x, uint32_t y) {
 }
 
 uint32_t get_screen_width_chars(void) {
-    init_fb();
+    if (!fb_info.initialized) return 0;
     return fb_info.width / fb_info.char_width;
 }
 
 uint32_t get_screen_height_chars(void) {
-    init_fb();
+    if (!fb_info.initialized) return 0;
     return fb_info.height / fb_info.char_height;
 }
 
 void draw_rect(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color) {
-    init_fb();
+    if (!fb_info.initialized) return;
 
     for (uint32_t dy = 0; dy < height; dy++) {
         for (uint32_t dx = 0; dx < width; dx++) {
@@ -388,7 +382,7 @@ void draw_rect(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t
 }
 
 void draw_line(uint32_t x1, uint32_t y1, uint32_t x2, uint32_t y2, uint32_t color) {
-    init_fb();
+    if (!fb_info.initialized) return;
 
     int dx = (x2 > x1) ? (x2 - x1) : (x1 - x2);
     int dy = (y2 > y1) ? (y2 - y1) : (y1 - y2);
@@ -410,4 +404,15 @@ void draw_line(uint32_t x1, uint32_t y1, uint32_t x2, uint32_t y2, uint32_t colo
             y1 += sy;
         }
     }
+}
+
+void get_cursor_pos(uint32_t *x, uint32_t *y) {
+    if (!fb_info.initialized) {
+        if (x) *x = 0;
+        if (y) *y = 0;
+        return;
+    }
+    
+    if (x) *x = fb_info.cursor_x / fb_info.char_width;
+    if (y) *y = fb_info.cursor_y / fb_info.char_height;
 }

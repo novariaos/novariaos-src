@@ -22,7 +22,7 @@
 #include <rootfs/usr/src/userspace_init.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include <lib/bootloader/limine.h>
+#include <lib/limine.h>
 #include <core/kernel/elf.h>
 
 static volatile struct limine_module_request module_request = {
@@ -65,6 +65,7 @@ void limine_smp_entry(struct limine_mp_info *info) {
 }
 
 void kmain() {
+    init_fb();
     kprint(":: Initializing memory manager...\n", 7);
     initializeMemoryManager();
 
