@@ -31,6 +31,7 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
             proc->active = false;
 
             procfs_unregister(proc->pid);
+            kfree(proc->bytecode);
             if(proc->sp > 0) proc->sp--;
             break;
         }
@@ -47,6 +48,7 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
 
             int target_fd = proc->stack[proc->sp - 1];
             int argc = proc->stack[proc->sp - 2];
+            if (argc < 0 || argc > 32) { result = -1; break; }
             
             proc->sp -= 2;
 
@@ -400,6 +402,7 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
         }
 
         case SYS_PORT_OUT_BYTE: {
+            if (!caps_has_capability(proc, CAP_DRV_ACCESS)) { result = -1; break; }
             if (proc->sp < 2) {
                 result = -1;
                 break;
