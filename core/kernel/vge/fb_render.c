@@ -280,25 +280,20 @@ void newline(void) {
     fb_info.cursor_y += char_height;
 
     if (fb_info.cursor_y + char_height > fb_info.height) {
-        uint8_t *src = (uint8_t*)fb_addr + fb_info.scroll_bytes;
-        uint8_t *dst = (uint8_t*)fb_addr;
+        size_t pitch_bytes = fb_info.pitch;
+        size_t bytes_to_move = fb_info.screen_bytes - pitch_bytes;
 
-        memmove(dst, src, fb_info.remaining_bytes);
+        for (uint32_t step = 0; step < char_height; step++) {
+            uint8_t *src = (uint8_t*)fb_addr + pitch_bytes;
+            uint8_t *dst = (uint8_t*)fb_addr;
+            memmove(dst, src, bytes_to_move);
 
-        uint8_t *clear_start = (uint8_t*)fb_addr + fb_info.remaining_bytes;
-        uint32_t *clear_start_32 = (uint32_t*)clear_start;
-
-        for (size_t i = 0; i < fb_info.clear_words; i++) {
-            clear_start_32[i] = bg_color;
-        }
-
-        size_t remainder = fb_info.scroll_bytes % sizeof(uint32_t);
-        if (remainder) {
-            uint8_t *bg_bytes = (uint8_t*)&bg_color;
-            uint8_t *rem_ptr = (uint8_t*)(clear_start_32 + fb_info.clear_words);
-            for (size_t i = 0; i < remainder; i++) {
-                rem_ptr[i] = bg_bytes[i % sizeof(uint32_t)];
+            uint32_t *bottom_row = (uint32_t*)((uint8_t*)fb_addr + bytes_to_move);
+            for (uint32_t x = 0; x < fb_info.width; x++) {
+                bottom_row[x] = bg_color;
             }
+
+            for (volatile int d = 0; d < 1000000; d++) {}
         }
         
         fb_info.cursor_y = fb_info.height - char_height;
