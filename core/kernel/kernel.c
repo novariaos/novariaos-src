@@ -213,10 +213,12 @@ void kmain() {
         }
     }
 
-    shell_init();
-    shell_run();
+    // uncomment it if you need the internal shell:
+    // shell_init();
+    // shell_run();
 
-    // while(true) {
-    //     nvm_scheduler_tick();
-    // }
+    while(true) {
+        keyboard_getchar();
+        nvm_scheduler_tick();
+    }
 }

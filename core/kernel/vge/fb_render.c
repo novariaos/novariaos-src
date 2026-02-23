@@ -212,6 +212,20 @@ void init_fb(void) {
     clear_screen();
 }
 
+uint32_t* get_framebuffer(void) {
+    return fb_info.fb_addr;
+}
+
+void get_fb_dimensions(uint32_t* width, uint32_t* height, uint32_t* pitch) {
+    if (width) *width = fb_info.width;
+    if (height) *height = fb_info.height;
+    if (pitch) *pitch = fb_info.pitch;
+}
+
+uint32_t get_fb_pitch_pixels(void) {
+    return fb_info.pitch_pixels;
+}
+
 static void put_pixel(uint32_t x, uint32_t y, uint32_t color) {
     if (!fb_info.initialized) return;
     if (x >= fb_info.width || y >= fb_info.height) return;
@@ -372,7 +386,7 @@ uint32_t get_screen_height_chars(void) {
 }
 
 void draw_rect(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color) {
-    if (!fb_info.initialized) return;
+    if (!fb_info.initialized) return;   
 
     for (uint32_t dy = 0; dy < height; dy++) {
         for (uint32_t dx = 0; dx < width; dx++) {
