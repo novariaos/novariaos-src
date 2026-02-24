@@ -19,12 +19,12 @@ int fat32_mount(vfs_mount_t* mnt, const char* device, void* data) {
     block_device_t* bdev = find_block_device(device);
     if (!bdev) {
         LOG_ERROR("Block device '%s' not found\n", device);
-        return -19;
+        return -ENODEV;
     }
 
     uint8_t* boot_sector = kmalloc(bdev->block_size);
     if (!boot_sector) {
-        return -12;
+        return -ENOMEM;
     }
 
     int result = bdev->ops.read_blocks(bdev, 0, 1, boot_sector);
@@ -40,7 +40,7 @@ int fat32_mount(vfs_mount_t* mnt, const char* device, void* data) {
     if (signature != 0xAA55) {
         LOG_ERROR("Invalid boot signature: 0x%X (expected 0xAA55)\n", signature);
         kfree(boot_sector);
-        return -22;
+        return -EINVAL;
     }
 
     if (strncmp(bpb->fs_type, "FAT32   ", 8) != 0) {
@@ -50,7 +50,7 @@ int fat32_mount(vfs_mount_t* mnt, const char* device, void* data) {
     fat32_fs_t* fs_data = kmalloc(sizeof(fat32_fs_t));
     if (!fs_data) {
         kfree(boot_sector);
-        return -12;
+        return -ENOMEM;
     }
 
     fs_data->block_dev = bdev;
@@ -77,19 +77,13 @@ int fat32_mount(vfs_mount_t* mnt, const char* device, void* data) {
                   fs_data->total_clusters);
         kfree(fs_data);
         kfree(boot_sector);
-        return -22;
+        return -EINVAL;
     }
 
-    LOG_INFO("FAT32 mounted successfully:\n");
-    LOG_INFO("  Volume Label: %.11s\n", bpb->volume_label);
-    LOG_INFO("  Bytes/Sector: %u\n", fs_data->bytes_per_sector);
-    LOG_INFO("  Sectors/Cluster: %u\n", fs_data->sectors_per_cluster);
-    LOG_INFO("  Reserved Sectors: %u\n", fs_data->reserved_sectors);
-    LOG_INFO("  Number of FATs: %u\n", fs_data->num_fats);
-    LOG_INFO("  FAT Size: %u sectors\n", fs_data->fat_size);
-    LOG_INFO("  Root Cluster: %u\n", fs_data->root_cluster);
-    LOG_INFO("  Total Sectors: %u\n", fs_data->total_sectors);
-    LOG_INFO("  Total Clusters: %u\n", fs_data->total_clusters);
+    LOG_INFO("FAT32 mounted successfully: %.11s\n", bpb->volume_label);
+    LOG_DEBUG("  Bytes/Sector: %u, Sectors/Cluster: %u, Total Clusters: %u\n",
+              fs_data->bytes_per_sector, fs_data->sectors_per_cluster,
+              fs_data->total_clusters);
 
     mnt->fs_private = fs_data;
 
@@ -351,15 +345,12 @@ static uint8_t fat32_lfn_checksum(const uint8_t name83[11]) {
 static void fat32_lfn_extract(const fat32_lfn_entry_t* lfn,
                                char out[13], size_t* out_len) {
     *out_len = 0;
-    const uint16_t* parts[3];
-    const int lens[3] = {5, 6, 2};
     uint16_t buf[13];
 
     // Copy the three name fields into a flat buffer
-    for (int i = 0; i < 5; i++)  buf[i]     = le16_to_cpu(lfn->name1[i]);
+    for (int i = 0; i < 5; i++)  buf[i]      = le16_to_cpu(lfn->name1[i]);
     for (int i = 0; i < 6; i++)  buf[5 + i]  = le16_to_cpu(lfn->name2[i]);
     for (int i = 0; i < 2; i++)  buf[11 + i] = le16_to_cpu(lfn->name3[i]);
-    (void)parts; (void)lens;
 
     for (int i = 0; i < 13; i++) {
         uint16_t ch = buf[i];
@@ -698,20 +689,127 @@ int fat32_vfs_stat(vfs_mount_t* mnt, const char* path, vfs_stat_t* stat) {
     return 0;
 }
 
+int fat32_vfs_open(vfs_mount_t* mnt, const char* path, int flags, vfs_file_handle_t* h) {
+    if (!mnt || !mnt->fs_private || !path || !h) return -EINVAL;
+
+    fat32_fs_t* fs = (fat32_fs_t*)mnt->fs_private;
+
+    fat32_entry_t* entry = kmalloc(sizeof(fat32_entry_t));
+    if (!entry) return -ENOMEM;
+
+    int rc = fat32_resolve_path(fs, path, entry);
+    if (rc != 0) {
+        kfree(entry);
+        return rc;
+    }
+
+    if (entry->is_dir) {
+        kfree(entry);
+        return -EISDIR;
+    }
+
+    h->private_data = entry;
+    h->position     = 0;
+    return 0;
+}
+
+int fat32_vfs_close(vfs_mount_t* mnt, vfs_file_handle_t* h) {
+    (void)mnt;
+    if (!h) return -EINVAL;
+
+    if (h->private_data) {
+        kfree(h->private_data);
+        h->private_data = NULL;
+    }
+    return 0;
+}
+
+vfs_ssize_t fat32_vfs_read(vfs_mount_t* mnt, vfs_file_handle_t* h,
+                            void* buf, size_t count) {
+    if (!mnt || !mnt->fs_private || !h || !h->private_data || !buf) return -EINVAL;
+
+    fat32_fs_t*   fs    = (fat32_fs_t*)mnt->fs_private;
+    fat32_entry_t* entry = (fat32_entry_t*)h->private_data;
+
+    if (h->position < 0 || (uint32_t)h->position >= entry->file_size)
+        return 0;
+
+    // Clamp count to remaining bytes
+    size_t remaining = entry->file_size - (uint32_t)h->position;
+    if (count > remaining)
+        count = remaining;
+    if (count == 0)
+        return 0;
+
+    uint8_t* cluster_buf = kmalloc(fs->bytes_per_cluster);
+    if (!cluster_buf) return -ENOMEM;
+
+    size_t   bytes_read   = 0;
+    uint32_t cluster      = entry->first_cluster;
+    uint32_t cluster_idx  = (uint32_t)h->position / fs->bytes_per_cluster;
+    uint32_t offset_in_cluster = (uint32_t)h->position % fs->bytes_per_cluster;
+
+    // Advance to the cluster that contains the current position
+    for (uint32_t i = 0; i < cluster_idx; i++) {
+        if (fat32_is_eoc(cluster) || fat32_is_bad(cluster)) {
+            kfree(cluster_buf);
+            return -EINVAL;
+        }
+        int rc = fat32_read_fat_entry(fs, cluster, &cluster);
+        if (rc != 0) {
+            kfree(cluster_buf);
+            return rc;
+        }
+    }
+
+    while (bytes_read < count) {
+        if (cluster < 2 || fat32_is_eoc(cluster) || fat32_is_bad(cluster))
+            break;
+
+        int rc = fat32_read_cluster(fs, cluster, cluster_buf);
+        if (rc != 0) {
+            kfree(cluster_buf);
+            return rc;
+        }
+
+        size_t chunk = fs->bytes_per_cluster - offset_in_cluster;
+        if (chunk > count - bytes_read)
+            chunk = count - bytes_read;
+
+        memcpy((uint8_t*)buf + bytes_read, cluster_buf + offset_in_cluster, chunk);
+        bytes_read        += chunk;
+        offset_in_cluster  = 0;   // Only non-zero for the first cluster
+
+        if (bytes_read < count) {
+            uint32_t next;
+            rc = fat32_read_fat_entry(fs, cluster, &next);
+            if (rc != 0) {
+                kfree(cluster_buf);
+                return rc;
+            }
+            cluster = next;
+        }
+    }
+
+    kfree(cluster_buf);
+    h->position += (vfs_off_t)bytes_read;
+    return (vfs_ssize_t)bytes_read;
+}
+
 static const vfs_fs_ops_t fat32_ops = {
-    .name = "fat32",
-    .mount = fat32_mount,
+    .name    = "fat32",
+    .mount   = fat32_mount,
     .unmount = fat32_unmount,
-    .open = NULL,
-    .close = NULL,
-    .read = NULL,
-    .write = NULL,
-    .seek = NULL,
-    .mkdir = NULL,
-    .rmdir = NULL,
+    .open    = fat32_vfs_open,
+    .close   = fat32_vfs_close,
+    .read    = fat32_vfs_read,
+    .write   = NULL,
+    .seek    = NULL,
+    .mkdir   = NULL,
+    .rmdir   = NULL,
     .readdir = fat32_vfs_readdir,
-    .stat = fat32_vfs_stat,
-    .unlink = NULL,
-    .ioctl = NULL,
-    .sync = NULL,
+    .stat    = fat32_vfs_stat,
+    .unlink  = NULL,
+    .ioctl   = NULL,
+    .sync    = NULL,
 };

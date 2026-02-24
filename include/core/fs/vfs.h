@@ -46,6 +46,8 @@
 #define EEXIST  17
 #define EPERM   1
 #define ENODEV  19
+#define EISDIR  21
+#define ENOSPC  28
 
 // File type bits for st_mode
 #define VFS_S_IFMT   0xF000
