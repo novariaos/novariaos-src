@@ -13,7 +13,7 @@ struct kernel_api {
     void (*kfree)(void* ptr);
     int (*keyboard_register_hotkey)(int scancode, int modifiers, void (*callback)(void*), void* data);
     void (*keyboard_unregister_hotkey)(int id);
-    void* (*get_framebuffer)(void);
+    uint32_t* (*get_framebuffer)(void);
     void (*get_fb_dimensions)(uint32_t* width, uint32_t* height, uint32_t* pitch);
     uint32_t (*get_fb_pitch_pixels)(void);
 };
