@@ -10,6 +10,7 @@
 #include <core/drivers/timer.h>
 #include <core/drivers/keyboard.h>
 #include <core/drivers/cdrom.h>
+#include <core/drivers/ramdisk.h>
 #include <core/kernel/shell.h>
 #include <core/kernel/log.h>
 #include <core/fs/ramfs.h>
@@ -82,10 +83,11 @@ void kmain() {
 
     void* initramfs_location = NULL;
     size_t initramfs_size = 0;
-    
+
     if (module_request.response != NULL && module_request.response->module_count > 0) {
         LOG_DEBUG("Checking Limine modules...\n");
 
+        int disk_index = 0;
         for (uint64_t i = 0; i < module_request.response->module_count; i++) {
             struct limine_file *module = module_request.response->modules[i];
             LOG_DEBUG("Module %d: size=%d\n", i, module->size);
@@ -98,6 +100,18 @@ void kmain() {
                     iso_location = (void*)module->address;
                     iso_size = module->size;
                     LOG_DEBUG("Found ISO9660 in module %d\n", i);
+                    continue;
+                }
+            }
+
+            // Check for disk image by MBR signature (0x55AA at offset 510)
+            if (module->size >= 512) {
+                uint8_t* mbr = (uint8_t*)module->address;
+                if (mbr[510] == 0x55 && mbr[511] == 0xAA) {
+                    char name[4] = {'h', 'd', 'a' + disk_index, '\0'};
+                    ramdisk_register(name, (void*)module->address, module->size);
+                    LOG_DEBUG("Found disk image in module %d, registered as %s\n", i, name);
+                    disk_index++;
                     continue;
                 }
             }
@@ -212,10 +226,6 @@ void kmain() {
             }
         }
     }
-
-    // uncomment it if you need the internal shell:
-    // shell_init();
-    // shell_run();
 
     while(true) {
         keyboard_getchar();

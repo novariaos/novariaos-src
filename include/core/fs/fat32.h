@@ -194,8 +194,22 @@ int fat32_lookup(fat32_fs_t* fs, uint32_t dir_cluster,
 
 // --- VFS interface ---
 //
-// These functions provide the glue between FAT32 directory operations
+// These functions provide the glue between FAT32 file/directory operations
 // and the Virtual File System (VFS) layer.
+
+// Open a file and populate the file handle. Allocates private_data (fat32_entry_t).
+// Returns 0 on success, negative error code otherwise.
+int fat32_vfs_open(vfs_mount_t* mnt, const char* path, int flags, vfs_file_handle_t* h);
+
+// Close a file handle and free associated private_data.
+// Returns 0 on success, negative error code otherwise.
+int fat32_vfs_close(vfs_mount_t* mnt, vfs_file_handle_t* h);
+
+// Read up to @count bytes from the file at h->position into @buf.
+// Advances h->position by the number of bytes actually read.
+// Returns number of bytes read (0 = EOF), or negative error code.
+vfs_ssize_t fat32_vfs_read(vfs_mount_t* mnt, vfs_file_handle_t* h,
+                            void* buf, size_t count);
 
 // Read directory contents through VFS interface.
 // Returns the number of entries read, or negative error code.
