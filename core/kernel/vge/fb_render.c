@@ -271,32 +271,27 @@ void clear_screen(void) {
 void newline(void) {
     if (!fb_info.initialized) return;
 
-    uint32_t char_height = fb_info.char_height;
-    uint32_t pitch_pixels = fb_info.pitch_pixels;
-    uint32_t *fb_addr = fb_info.fb_addr;
-    uint32_t bg_color = fb_info.bg_color;
-    
     fb_info.cursor_x = 0;
-    fb_info.cursor_y += char_height;
+    fb_info.cursor_y += fb_info.char_height;
 
-    if (fb_info.cursor_y + char_height > fb_info.height) {
-        size_t pitch_bytes = fb_info.pitch;
-        size_t bytes_to_move = fb_info.screen_bytes - pitch_bytes;
+    // Если курсор ушел за пределы экрана
+    if (fb_info.cursor_y + fb_info.char_height > fb_info.height) {
+        
+        // 1. Сдвигаем экран вверх ровно на высоту символа за ОДИН вызов memmove
+        uint8_t *src = (uint8_t*)fb_info.fb_addr + fb_info.scroll_bytes;
+        uint8_t *dst = (uint8_t*)fb_info.fb_addr;
+        
+        memmove(dst, src, fb_info.remaining_bytes);
 
-        for (uint32_t step = 0; step < char_height; step++) {
-            uint8_t *src = (uint8_t*)fb_addr + pitch_bytes;
-            uint8_t *dst = (uint8_t*)fb_addr;
-            memmove(dst, src, bytes_to_move);
-
-            uint32_t *bottom_row = (uint32_t*)((uint8_t*)fb_addr + bytes_to_move);
-            for (uint32_t x = 0; x < fb_info.width; x++) {
-                bottom_row[x] = bg_color;
-            }
-
-            for (volatile int d = 0; d < 1000000; d++) {}
+        // 2. Очищаем только что освободившуюся нижнюю строку (куда будем печатать)
+        uint32_t *bottom_area = (uint32_t*)((uint8_t*)fb_info.fb_addr + fb_info.remaining_bytes);
+        
+        for (size_t i = 0; i < fb_info.clear_words; i++) {
+            bottom_area[i] = fb_info.bg_color;
         }
         
-        fb_info.cursor_y = fb_info.height - char_height;
+        // 3. Возвращаем курсор на нижнюю строку
+        fb_info.cursor_y = fb_info.height - fb_info.char_height;
     }
 }
 
