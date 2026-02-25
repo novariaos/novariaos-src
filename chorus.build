@@ -6,7 +6,7 @@ variables:
   QEMU: qemu-system-x86_64
   CFLAGS: -I./include/ -I./ -fno-stack-protector -m64 -mcmodel=large -nostdlib -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -c
   ASMFLAGS: -f elf64
-  LDFLAGS: -nostdlib -m elf_x86_64 -T link.ld -z noexecstack
+  LDFLAGS: -nostdlib -m elf_x86_64 -T link.ld -z noexecstack #-Map=kernel.map
   BUILD_DIR: build
   OBJ_DIR: build/objects
   KERNEL_OUT: kernel.bin
