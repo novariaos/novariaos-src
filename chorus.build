@@ -318,8 +318,9 @@ targets:
   iso:
     deps: [prepare, kernel.bin]
     cmds:
+      - "cp limine/limine-bios-cd.bin ${BUILD_DIR}/boot/"
       - "xorriso -as mkisofs -quiet -iso-level 3 -o ${BUILD_DIR}/boot/rootfs.img rootfs/"
-      - "xorriso -as mkisofs -b limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table --protective-msdos-label -iso-level 3 -partition_offset 64 -quiet -o dist/build_${DATE}.iso ${BUILD_DIR}/boot/"
+      - "xorriso -as mkisofs -b limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table --efi-boot limine-bios-cd.bin --efi-boot-part --efi-boot-image --protective-msdos-label -iso-level 3 -partition_offset 64 -quiet -o dist/build_${DATE}.iso ${BUILD_DIR}/boot/"
       - "limine bios-install dist/build_${DATE}.iso"
 
   run:
@@ -340,6 +341,21 @@ targets:
         sh -c 'mkdir -p rootfs/etc && echo
         "NAME=${OS_NAME}\nVERSION=\"${OS_VERSION}\"\nID=${OS_ID}\nANSI_COLOR=\"${OS_COLOR}\"\nPRETTY_NAME=\"${OS_NAME} ${OS_VERSION}-RELEASE\"\nHOME_URL=\"https://novariaos.github.io/\"\nBUG_REPORT_URL=\"https://github.com/novariaos/novariaos-src/issues\""
         > rootfs/etc/os-release'
+      - "cp limine/limine-bios-cd.bin ${BUILD_DIR}/boot/"
       - "xorriso -as mkisofs -quiet -iso-level 3 -o ${BUILD_DIR}/boot/rootfs.img rootfs/"
-      - "xorriso -as mkisofs -b limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table --protective-msdos-label -iso-level 3 -partition_offset 64 -quiet -o dist/${OS_NAME}-${OS_VERSION}-${OS_STAGE}-amd64-memstick.iso ${BUILD_DIR}/boot/"
-      - "limine bios-install dist/${OS_NAME}-${OS_VERSION}-${OS_STAGE}-amd64-memstick.iso"
+      - >
+        xorriso -as mkisofs
+        -b limine-bios-cd.bin
+        -no-emul-boot
+        -boot-load-size 4
+        -boot-info-table
+        --efi-boot limine-bios-cd.bin
+        --efi-boot-part
+        --efi-boot-image
+        --protective-msdos-label
+        -iso-level 3
+        -partition_offset 64
+        -quiet
+        -o dist/${OS_NAME}-${OS_VERSION}-${OS_STAGE}-amd64.iso
+        ${BUILD_DIR}/boot/
+      - "limine bios-install dist/${OS_NAME}-${OS_VERSION}-${OS_STAGE}-amd64.iso"
