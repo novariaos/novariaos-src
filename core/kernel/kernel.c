@@ -229,6 +229,9 @@ void kmain() {
         }
     }
 
+    shell_init();
+    shell_run();
+
     while(true) {
         keyboard_getchar();
         nvm_scheduler_tick();

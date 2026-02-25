@@ -3,7 +3,7 @@
 #include <core/drivers/ide.h>
 #include <core/fs/block.h>
 #include <core/kernel/mem/allocator.h>
-#include <core/kernel/log.h>
+#include <log.h>
 #include <core/arch/io.h>
 #include <stdint.h>
 #include <stddef.h>
