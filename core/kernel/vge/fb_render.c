@@ -38,11 +38,11 @@ static struct {
     size_t scroll_pixels;
     size_t remaining_pixels;
     uint32_t *clear_area_start;
-    size_t scroll_bytes;       // precomputed: char_height * pitch
-    size_t screen_bytes;       // precomputed: height * pitch
-    size_t clear_words;        // precomputed: scroll_bytes / sizeof(uint32_t)
-    size_t remaining_bytes;    // precomputed: (height - char_height) * pitch
-    uint32_t *clear_area;      // precomputed: fb_addr + (remaining_bytes / 4)
+    size_t scroll_bytes;
+    size_t screen_bytes;
+    size_t clear_words;
+    size_t remaining_bytes;
+    uint32_t *clear_area;
 } fb_info = {0};
 
 // Built-in fallback font (used when system_font is not loaded)
@@ -271,30 +271,21 @@ void clear_screen(void) {
 void newline(void) {
     if (!fb_info.initialized) return;
 
-    uint32_t char_height = fb_info.char_height;
-    uint32_t pitch_pixels = fb_info.pitch_pixels;
-    uint32_t *fb_addr = fb_info.fb_addr;
-    uint32_t bg_color = fb_info.bg_color;
-    
     fb_info.cursor_x = 0;
-    fb_info.cursor_y += char_height;
+    fb_info.cursor_y += fb_info.char_height;
 
-    if (fb_info.cursor_y + char_height > fb_info.height) {
-        size_t pitch_bytes = fb_info.pitch;
-        size_t bytes_to_move = fb_info.screen_bytes - pitch_bytes;
+    if (fb_info.cursor_y + fb_info.char_height > fb_info.height) {
+        uint8_t *src = (uint8_t*)fb_info.fb_addr + fb_info.scroll_bytes;
+        uint8_t *dst = (uint8_t*)fb_info.fb_addr;
+        
+        memmove(dst, src, fb_info.remaining_bytes);
 
-        for (uint32_t step = 0; step < char_height; step++) {
-            uint8_t *src = (uint8_t*)fb_addr + pitch_bytes;
-            uint8_t *dst = (uint8_t*)fb_addr;
-            memmove(dst, src, bytes_to_move);
-
-            uint32_t *bottom_row = (uint32_t*)((uint8_t*)fb_addr + bytes_to_move);
-            for (uint32_t x = 0; x < fb_info.width; x++) {
-                bottom_row[x] = bg_color;
-            }
+        uint32_t *bottom_area = (uint32_t*)((uint8_t*)fb_info.fb_addr + fb_info.remaining_bytes);
+        for (size_t i = 0; i < fb_info.clear_words; i++) {
+            bottom_area[i] = fb_info.bg_color;
         }
         
-        fb_info.cursor_y = fb_info.height - char_height;
+        fb_info.cursor_y = fb_info.height - fb_info.char_height;
     }
 }
 
