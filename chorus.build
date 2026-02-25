@@ -4,9 +4,9 @@ variables:
   LD: ld
   GRUB_MKRESCUE: grub-mkrescue
   QEMU: qemu-system-x86_64
-  CFLAGS: -I./include/ -I./ -fno-stack-protector -m64 -mcmodel=large -nostdlib -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -c
+  CFLAGS: -I./include/ -I./lib/ -fno-stack-protector -m64 -mcmodel=large -nostdlib -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -c
   ASMFLAGS: -f elf64
-  LDFLAGS: -nostdlib -m elf_x86_64 -T link.ld -z noexecstack
+  LDFLAGS: -nostdlib -m elf_x86_64 -T link.ld -z noexecstack #-Map=kernel.map
   BUILD_DIR: build
   OBJ_DIR: build/objects
   KERNEL_OUT: kernel.bin
@@ -49,10 +49,7 @@ targets:
             core/kernel/nvm/instructions/stack, core/kernel/nvm/instructions/flowcontrol,
             core/kernel/nvm/instructions/memory, core/kernel/nvm/instructions/system, core/kernel/nvm/syscalls,
 
-            core/crypto/chacha20, core/crypto/chacha20_rng,
-
-            core/kernel/userspace, rootfs/usr/src/userspace_init, rootfs/usr/src/echo,rootfs/usr/src/clear,
-            rootfs/usr/src/rm, rootfs/usr/src/write, rootfs/usr/src/nova, rootfs/usr/src/uname]
+            core/crypto/chacha20, core/crypto/chacha20_rng]
       cmds:
         - "mkdir -p ${BUILD_DIR}/boot"
         - "${LD} ${LDFLAGS} -o ${BUILD_DIR}/boot/${@} $(echo ${^} | xargs | cut -d ' ' -f2- | xargs printf -- '${OBJ_DIR}/%s.o\\n' | xargs)"

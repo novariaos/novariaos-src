@@ -1,5 +1,5 @@
 #include <core/kernel/mem/buddy.h>
-#include <core/kernel/log.h>
+#include <log.h>
 #include <core/arch/panic.h>
 #include <stddef.h>
 #include <stdint.h>

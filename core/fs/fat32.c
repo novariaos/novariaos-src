@@ -3,7 +3,7 @@
 #include <core/fs/fat32.h>
 #include <core/fs/block.h>
 #include <core/kernel/kstd.h>
-#include <core/kernel/log.h>
+#include <log.h>
 #include <core/kernel/mem.h>
 
 static const vfs_fs_ops_t fat32_ops;

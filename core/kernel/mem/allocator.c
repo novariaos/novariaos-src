@@ -1,8 +1,8 @@
 #include <core/kernel/mem/allocator.h>
 #include <core/kernel/mem/buddy.h>
 #include <core/kernel/kstd.h>
-#include <core/kernel/log.h>
-#include <lib/limine.h>
+#include <log.h>
+#include <limine.h>
 #include <core/arch/panic.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -22,6 +22,13 @@ static uint64_t hhdm_offset;
 static size_t allocated_memory = 0;
 static size_t alloc_count = 0;
 static size_t free_count = 0;
+
+static size_t alloc_total = 0;
+static size_t free_total = 0;
+static uintptr_t last_alloc_ptr = 0;
+static size_t last_alloc_size = 0;
+static uintptr_t last_free_ptr = 0;
+static size_t last_free_size = 0;
 
 typedef struct alloc_info {
     uint32_t order;
@@ -165,6 +172,12 @@ void* kmalloc(size_t size) {
 
     allocated_memory += size;
     alloc_count++;
+    
+    alloc_total++;
+    last_alloc_ptr = (uintptr_t)block + sizeof(alloc_info_t);
+    last_alloc_size = size;
+    LOG_DEBUG("kmalloc: #%zu allocated %p (size=%zu, total_allocated=%zu)\n", 
+              alloc_total, last_alloc_ptr, size, allocated_memory);
 
     return (void*)((uintptr_t)block + sizeof(alloc_info_t));
 }
@@ -178,16 +191,35 @@ void kfree(void* ptr) {
     }
 
     alloc_info_t* info = (alloc_info_t*)((uintptr_t)ptr - sizeof(alloc_info_t));
+    
+    LOG_DEBUG("kfree: info at %p, magic=0x%08x, order=%u, user_size=%zu\n",
+              info, info->magic, info->order, info->user_size);
+    
+    LOG_DEBUG("kfree: caller address: %p\n", __builtin_return_address(0));
 
     if (info->magic != ALLOC_MAGIC) {
-        LOG_ERROR("kfree: corrupted allocation info at %p (expected magic=0x%08x, got=0x%08x)\n",
-                 ptr, ALLOC_MAGIC, info->magic);
-        panic("Invalid free: corrupted allocation info");
+        LOG_ERROR("kfree: CORRUPTION DETECTED at %p\n", ptr);
+        LOG_ERROR("kfree: expected magic=0x%08x, got=0x%08x\n", ALLOC_MAGIC, info->magic);
+        LOG_ERROR("kfree: order=%u (valid range: %u-%u)\n", 
+                  info->order, BUDDY_MIN_ORDER, BUDDY_MAX_ORDER);
+        LOG_ERROR("kfree: user_size=%zu\n", info->user_size);
+        LOG_ERROR("kfree: caller: %p\n", __builtin_return_address(0));
+        
+        uint32_t* dump = (uint32_t*)((uintptr_t)info - 16);
+        LOG_ERROR("kfree: memory dump at info-16: %08x %08x %08x %08x\n",
+                 dump[0], dump[1], dump[2], dump[3]);
+        LOG_ERROR("kfree: memory dump at info:    %08x %08x %08x %08x\n",
+                 dump[4], dump[5], dump[6], dump[7]);
+        LOG_ERROR("kfree: memory dump at info+16: %08x %08x %08x %08x\n",
+                 dump[8], dump[9], dump[10], dump[11]);
+        
+        panic("Invalid free. corrupted allocation info");
     }
 
     if (info->order < BUDDY_MIN_ORDER || info->order > BUDDY_MAX_ORDER) {
         LOG_ERROR("kfree: invalid order %u in allocation info (ptr=%p)\n", info->order, ptr);
-        panic("Invalid free: invalid order in allocation info");
+        LOG_ERROR("kfree: caller: %p\n", __builtin_return_address(0));
+        panic("Invalid free. invalid order in allocation info");
     }
 
     LOG_TRACE("kfree: freeing block order=%u, user_size=%zu\n", info->order, info->user_size);
@@ -273,7 +305,7 @@ void memory_test(void) {
         kprint("Free memory when failed: ", 4);
         kprint(buffer, 4);
         kprint("\n", 4);
-        panic("Allocation 2-3 failed");
+        panic("Test. Allocation 2-3 failed");
     }
 
     kprint("\nTesting edge cases...\n", 7);

@@ -94,6 +94,16 @@ static inline void log_format_basic(const char* level, const char* format, ...) 
             }
             
             fmt += 2;
+        } else if (*fmt == '%' && *(fmt + 1) == 'z' && *(fmt + 2) == 'u') {
+            size_t value = va_arg(args, size_t);
+            itoa((int)value, temp_buf, 10);
+            
+            char* n = temp_buf;
+            while (*n) {
+                buffer[buf_pos++] = *n++;
+            }
+            
+            fmt += 3;
         } else if (*fmt == '%' && *(fmt + 1) == 'x') {
             unsigned int value = va_arg(args, unsigned int);
             itoa((int)value, temp_buf, 16);
@@ -104,16 +114,31 @@ static inline void log_format_basic(const char* level, const char* format, ...) 
             }
             
             fmt += 2;
-        } else if (*fmt == '%' && *(fmt + 1) == 'X') {
+        } else if (*fmt == '%' && *(fmt + 1) == '0' && *(fmt + 2) == '8' && *(fmt + 3) == 'x') {
             unsigned int value = va_arg(args, unsigned int);
-            utoa_hex(value, temp_buf); 
+            
+            for (int i = 0; i < 8; i++) {
+                temp_buf[i] = '0';
+            }
+            temp_buf[8] = '\0';
+            
+            char hex_buf[32];
+            itoa((int)value, hex_buf, 16);
+            
+            int len = 0;
+            while (hex_buf[len]) len++;
+            
+            int start = 8 - len;
+            for (int i = 0; i < len; i++) {
+                temp_buf[start + i] = hex_buf[i];
+            }
             
             char* n = temp_buf;
             while (*n) {
                 buffer[buf_pos++] = *n++;
             }
             
-            fmt += 2;
+            fmt += 4;
         } else if (*fmt == '%' && *(fmt + 1) == 's') {
             const char* str = va_arg(args, const char*);
             while (*str) {

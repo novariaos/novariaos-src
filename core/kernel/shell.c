@@ -218,14 +218,15 @@ static void execute_command(const char* command) {
         return;
     }
     
-char* argv[16];
+    char* argv[16];
     int argc = parse_command(command, argv, 16);
     
     if (argc == 0) return;
     
     if (strcmp(argv[0], "help") == 0) {
         cmd_help();
-    } else if (strcmp(argv[0], "memtest") == 0) {
+    } else if (strcmp(argv[0], "#") == 0 ) {}
+    else if (strcmp(argv[0], "memtest") == 0) {
         memory_test();
     } else if (strcmp(argv[0], "memleak") == 0) {
         check_memory_leaks();
@@ -319,15 +320,6 @@ char* argv[16];
                 return;
             } else {
                 kprint("Error: Failed to read program file\n", 12);
-            }
-        } else if (userspace_exists(argv[0])) {
-            int ret = userspace_exec(argv[0], argc, argv);
-            if (ret != 0) {
-                kprint("\nProgram exited with code ", 12);
-                char buf[16];
-                itoa(ret, buf, 10);
-                kprint(buf, 12);
-                kprint("\n", 12);
             }
         } else {
             kprint(argv[0], 7);

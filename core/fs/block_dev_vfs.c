@@ -4,7 +4,7 @@
 #include <core/fs/block.h>
 #include <core/fs/vfs.h>
 #include <core/kernel/mem.h>
-#include <core/kernel/log.h>
+#include <log.h>
 #include <core/kernel/kstd.h>
 #include <string.h>
 
