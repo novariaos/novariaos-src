@@ -28,6 +28,11 @@
     - [x] Basic Read operations
     - [ ] Basic Write operations
 
+- [ ] IDE/ATA Disk Driver
+    - [x] ATA PIO detection (IDENTIFY)
+    - [x] LBA28 read
+    - [ ] LBA28 write
+
 ## Medium Priority
 - [ ] /dev/tty (WIP: current stage — write only)
 - [ ] Poor /sys/pci (vendor/device without interrupts)
