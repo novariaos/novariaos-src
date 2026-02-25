@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-#include <core/kernel/log.h>
+#include <log.h>
 #include <core/kernel/kstd.h>
 #include <core/kernel/vge/fb_render.h>
 #include <core/kernel/vge/palette.h>
-#include <lib/limine.h>
+#include <limine.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>

@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include <lib/limine.h>
+#include <limine.h>
 
 struct program {
     const char* data;

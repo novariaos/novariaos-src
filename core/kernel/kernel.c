@@ -12,7 +12,7 @@
 #include <core/drivers/cdrom.h>
 #include <core/drivers/ramdisk.h>
 #include <core/kernel/shell.h>
-#include <core/kernel/log.h>
+#include <log.h>
 #include <core/fs/ramfs.h>
 #include <core/fs/initramfs.h>
 #include <core/fs/iso9660.h>
@@ -20,10 +20,9 @@
 #include <core/fs/block_dev_vfs.h>
 #include <core/fs/block.h>
 #include <core/fs/fat32.h>
-#include <rootfs/usr/src/userspace_init.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include <lib/limine.h>
+#include <limine.h>
 #include <core/kernel/elf.h>
 
 static volatile struct limine_module_request module_request = {

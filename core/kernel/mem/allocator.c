@@ -1,8 +1,8 @@
 #include <core/kernel/mem/allocator.h>
 #include <core/kernel/mem/buddy.h>
 #include <core/kernel/kstd.h>
-#include <core/kernel/log.h>
-#include <lib/limine.h>
+#include <log.h>
+#include <limine.h>
 #include <core/arch/panic.h>
 #include <stddef.h>
 #include <stdint.h>

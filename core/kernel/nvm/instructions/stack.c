@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include <core/kernel/nvm/instructions.h>
-#include <core/kernel/log.h>
+#include <log.h>
 #include <core/drivers/serial.h>
 
 bool handle_halt(nvm_process_t* proc) {
