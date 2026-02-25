@@ -11,6 +11,7 @@
 #include <core/drivers/keyboard.h>
 #include <core/drivers/cdrom.h>
 #include <core/drivers/ramdisk.h>
+#include <core/drivers/ide.h>
 #include <core/kernel/shell.h>
 #include <core/kernel/log.h>
 #include <core/fs/ramfs.h>
@@ -74,6 +75,7 @@ void kmain() {
     ramfs_init();
     vfs_init();
     block_init();
+    ide_init();
     fat32_init();
     syslog_init();
     keyboard_init();
@@ -146,6 +148,7 @@ void kmain() {
 
     // Register any discovered block devices with the VFS.
     block_dev_vfs_init();
+
     
     const char* ascii_art[] = {
         " _   _                      _        ___  ____  ",
