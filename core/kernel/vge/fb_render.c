@@ -292,8 +292,6 @@ void newline(void) {
             for (uint32_t x = 0; x < fb_info.width; x++) {
                 bottom_row[x] = bg_color;
             }
-
-            for (volatile int d = 0; d < 1000000; d++) {}
         }
         
         fb_info.cursor_y = fb_info.height - char_height;
