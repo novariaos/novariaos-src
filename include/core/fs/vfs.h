@@ -5,10 +5,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define MAX_FILES 256
+#define MAX_FILES 1024
 #define MAX_HANDLES 64
 #define MAX_FILENAME 256
-#define MAX_FILE_SIZE 65536
+#define MAX_FILE_SIZE 134217728
 
 #define MAX_FS_NAME 32
 #define MAX_REGISTERED_FS 16
@@ -112,7 +112,8 @@ struct vfs_file_t {
     bool used;
     size_t size;
     vfs_file_type_t type;
-    char data[MAX_FILE_SIZE];
+    char* data;
+    bool owns_data;
 
     vfs_device_ops_t ops;
     void* dev_data;
@@ -206,6 +207,7 @@ int vfs_count(void);
 vfs_file_t* vfs_get_files(void);
 void vfs_list_dir(const char* dirname);
 void vfs_list(void);
+int vfs_create_static(const char* filename, const char* data, size_t size);
 int vfs_pseudo_register_with_fd(const char* filename, int fixed_fd,
                             vfs_dev_read_t read_fn,
                             vfs_dev_write_t write_fn,
