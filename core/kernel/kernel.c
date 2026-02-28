@@ -14,8 +14,6 @@
 #include <core/drivers/ide.h>
 #include <core/kernel/shell.h>
 #include <log.h>
-#include <core/fs/ramfs.h>
-#include <core/fs/initramfs.h>
 #include <core/fs/iso9660.h>
 #include <core/fs/vfs.h>
 #include <core/fs/block_dev_vfs.h>
@@ -26,6 +24,7 @@
 #include <limine.h>
 #include <core/kernel/elf.h>
 
+// Limine requests
 static volatile struct limine_module_request module_request = {
     .id = { LIMINE_COMMON_MAGIC, 0x3e7e279702be32af, 0xca1c4f3bd1280cee },
     .revision = 0
@@ -57,98 +56,7 @@ static volatile struct limine_paging_mode_request paging_mode_request = {
     .revision = 0
 };
 
-void limine_smp_entry(struct limine_mp_info *info) {
-    // This function is called on each additional CPU
-    // For now, just halt the CPU
-    while (1) {
-        asm volatile("hlt");
-    }
-}
-
-void kmain() {
-    init_fb();
-    kprint(":: Initializing memory manager...\n", 7);
-    initializeMemoryManager();
-
-    init_serial();
-    ramfs_init();
-    vfs_init();
-    block_init();
-    ide_init();
-    fat32_init();
-    syslog_init();
-    keyboard_init();
-    
-    void* iso_location = NULL;
-    size_t iso_size = 0;
-
-    void* initramfs_location = NULL;
-    size_t initramfs_size = 0;
-
-    if (module_request.response != NULL && module_request.response->module_count > 0) {
-        LOG_DEBUG("Checking Limine modules...\n");
-
-        int disk_index = 0;
-        for (uint64_t i = 0; i < module_request.response->module_count; i++) {
-            struct limine_file *module = module_request.response->modules[i];
-            LOG_DEBUG("Module %d: size=%d\n", i, module->size);
-
-            // Check for ISO9660 filesystem
-            if (module->size > 0x8005) {
-                char* sig = (char*)module->address + 0x8001;
-                if (sig[0] == 'C' && sig[1] == 'D' && sig[2] == '0' &&
-                    sig[3] == '0' && sig[4] == '1') {
-                    iso_location = (void*)module->address;
-                    iso_size = module->size;
-                    LOG_DEBUG("Found ISO9660 in module %d\n", i);
-                    continue;
-                }
-            }
-
-            // Check for disk image by MBR signature (0x55AA at offset 510)
-            if (module->size >= 512) {
-                uint8_t* mbr = (uint8_t*)module->address;
-                if (mbr[510] == 0x55 && mbr[511] == 0xAA) {
-                    char name[4] = {'h', 'd', 'a' + disk_index, '\0'};
-                    ramdisk_register(name, (void*)module->address, module->size);
-                    LOG_DEBUG("Found disk image in module %d, registered as %s\n", i, name);
-                    disk_index++;
-                    continue;
-                }
-            }
-
-            // Check for initramfs (not ISO and reasonable size)
-            if (!initramfs_location && module->size > 0) {
-                initramfs_location = (void*)module->address;
-                initramfs_size = module->size;
-                LOG_DEBUG("Found initramfs in module %d, size=%d\n", i, initramfs_size);
-            }
-        }
-    }
-    
-    if (iso_location) {
-        cdrom_set_iso_data(iso_location, iso_size);
-        cdrom_init();
-        iso9660_init(iso_location, iso_size);
-        LOG_DEBUG("ISO9660 filesystem mounted\n");
-
-        iso9660_mount_to_vfs("/", "/");
-        LOG_DEBUG("ISO contents mounted to /\n");
-
-        LOG_DEBUG("Checking mounted files...\n");
-        vfs_list();
- 
-        init_vge_font();
-        palette_init();
-        clear_screen();
-    } else {
-        LOG_DEBUG(":: ISO9660 filesystem not found\n");
-    }
-
-    // Register any discovered block devices with the VFS.
-    block_dev_vfs_init();
-
-    
+static void show_banner(void) {
     const char* ascii_art[] = {
         " _   _                      _        ___  ____  ",
         "| \\ | | _____   ____ _ _ __(_) __ _ / _ \\/ ___| ",
@@ -164,51 +72,82 @@ void kmain() {
 
     kprint("                                 TG: ", 15);
     kprint("@NovariaOS\n", 9);
+}
 
-    if (initramfs_location) {
-        LOG_DEBUG("Loading initramfs at 0x%p, size=%d\n", initramfs_location, initramfs_size);
-        initramfs_load_from_memory(initramfs_location, initramfs_size);
-    } else {
-        LOG_DEBUG("Initramfs not found\n");
+static void early_init(void) {
+    init_fb();
+    kprint(":: Initializing memory manager...\n", 7);
+    initializeMemoryManager();
+    init_serial();
+}
+
+static void fs_init(void) {
+    vfs_init();
+    block_init();
+    
+    ide_init();
+    fat32_init();
+
+    block_dev_vfs_init();
+}
+
+static void process_boot_modules(void) {
+    if (module_request.response == NULL || module_request.response->module_count == 0) {
+        LOG_DEBUG("No boot modules found\n");
+        return;
     }
-    LOG_DEBUG("Initramfs loaded\n");
-    nvm_init();
-    LOG_DEBUG("NVM initialized\n");
-    LOG_DEBUG("Userspace programs registered\n");
 
-    size_t program_count = initramfs_get_count();
-    LOG_DEBUG("Initramfs program count: %d\n", program_count);
-    if (program_count > 0) {
-        for (size_t i = 0; i < program_count; i++) {
-            struct program* prog = initramfs_get_program(i);
-            if (prog && prog->size > 0) {
-                char buf[32];
-                int n = i;
-                char* p = buf;
-                if (n == 0) {
-                    *p++ = '0';
-                } else {
-                    char* start = p;
-                    while (n > 0) {
-                        *p++ = '0' + n % 10;
-                        n /= 10;
-                    }
-                    p--;
-                    while (start < p) {
-                        char temp = *start;
-                        *start = *p;
-                        *p = temp;
-                        start++;
-                        p--;
-                    }
-                }
-                *p = '\0';
-                
-                nvm_execute((uint8_t*)prog->data, prog->size, (uint16_t[]){CAP_ALL}, 1);
+    LOG_DEBUG("Processing %d boot modules...\n", module_request.response->module_count);
+
+    int disk_index = 0;
+    void* iso_location = NULL;
+    size_t iso_size = 0;
+
+    for (uint64_t i = 0; i < module_request.response->module_count; i++) {
+        struct limine_file *module = module_request.response->modules[i];
+        LOG_DEBUG("Module %d: size=%d\n", i, module->size);
+
+        // Check for ISO9660
+        if (module->size > 0x8005) {
+            char* sig = (char*)module->address + 0x8001;
+            if (sig[0] == 'C' && sig[1] == 'D' && sig[2] == '0' &&
+                sig[3] == '0' && sig[4] == '1') {
+                iso_location = (void*)module->address;
+                iso_size = module->size;
+                LOG_DEBUG("Found ISO9660 in module %d\n", i);
+                continue;
+            }
+        }
+
+        // Check for disk image (MBR signature)
+        if (module->size >= 512) {
+            uint8_t* mbr = (uint8_t*)module->address;
+            if (mbr[510] == 0x55 && mbr[511] == 0xAA) {
+                char name[4] = {'h', 'd', 'a' + disk_index, '\0'};
+                ramdisk_register(name, (void*)module->address, module->size);
+                LOG_DEBUG("Found disk image in module %d, registered as %s\n", i, name);
+                disk_index++;
             }
         }
     }
 
+    if (iso_location) {
+        cdrom_set_iso_data(iso_location, iso_size);
+        cdrom_init();
+        iso9660_init(iso_location, iso_size);
+        iso9660_mount_to_vfs("/", "/");
+        LOG_DEBUG("ISO9660 filesystem mounted to /\n");
+        
+        vfs_list();
+        init_vge_font();
+        palette_init();
+        clear_screen();
+    } else {
+        LOG_DEBUG("ISO9660 filesystem not found\n");
+    }
+}
+
+static void load_kernel_modules(void) {
     vfs_dirent_t entries[32];
     int num = vfs_readdir("/boot/modules", entries, 32);
     if (num > 0) {
@@ -228,10 +167,41 @@ void kmain() {
             }
         }
     }
+}
 
+void limine_smp_entry(struct limine_mp_info *info) {
+    // This function is called on each additional CPU
+    // For now, just halt the CPU
+    while (1) {
+        asm volatile("hlt");
+    }
+}
+
+void kmain() {
+    early_init();
+    
+    // Subsystem initialization
+    syslog_init();
+    keyboard_init();
+    nvm_init();
+    
+    // Filesystem initialization
+    fs_init();
+    
+    // Process boot modules (mounts rootfs)
+    process_boot_modules();
+
+    // Something like motd
+    show_banner();
+
+    // Load kernel modules from filesystem
+    load_kernel_modules();
+    
+    // Start user interface
     shell_init();
     shell_run();
 
+    // Work loop
     while(true) {
         keyboard_getchar();
         nvm_scheduler_tick();

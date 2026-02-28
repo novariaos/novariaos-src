@@ -40,7 +40,7 @@ targets:
 
             core/drivers/serial, core/drivers/timer, core/drivers/keyboard, core/drivers/cdrom, core/drivers/ramdisk, core/drivers/ide,
 
-            core/fs/ramfs, core/fs/initramfs, core/fs/vfs, core/fs/procfs, core/fs/iso9660, core/fs/devfs,
+            core/fs/vfs, core/fs/procfs, core/fs/iso9660, core/fs/devfs,
             core/fs/block, core/fs/block_dev_vfs, core/fs/bitmap, core/fs/inode, core/fs/dirent, core/fs/fat32,
 
             core/kernel/elf/parser, core/kernel/kmodules,
@@ -190,16 +190,6 @@ targets:
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  core/fs/ramfs:
-    deps: []
-    cmds:
-      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
-
-  core/fs/initramfs:
-    deps: []
-    cmds:
-      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
-
   core/fs/iso9660:
     deps: []
     cmds:
@@ -309,11 +299,6 @@ targets:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
-
-  nvma:
-    deps: []
-    cmds:
-      - "${CC} -o tools/nvma/nvma.bin tools/nvma/src/main.c"
 
   apps:
     deps: [nvma]

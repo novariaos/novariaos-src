@@ -208,8 +208,6 @@ void init_fb(void) {
     fb_info.clear_words = fb_info.scroll_bytes / sizeof(uint32_t);
 
     fb_info.initialized = true;
-
-    clear_screen();
 }
 
 uint32_t* get_framebuffer(void) {

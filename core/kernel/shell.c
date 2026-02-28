@@ -5,7 +5,6 @@
 #include <core/drivers/keyboard.h>
 #include <core/kernel/vge/fb.h>
 #include <core/kernel/mem.h>
-#include <core/fs/initramfs.h>
 #include <core/fs/iso9660.h>
 #include <core/fs/vfs.h>
 #include <core/kernel/nvm/nvm.h>
