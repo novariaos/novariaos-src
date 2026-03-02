@@ -192,7 +192,7 @@ int fat32_read_dir(fat32_fs_t* fs, uint32_t dir_cluster,
 int fat32_lookup(fat32_fs_t* fs, uint32_t dir_cluster,
                  const char* name, fat32_entry_t* out);
 
-// --- VFS interface ---
+// VFS interface
 //
 // These functions provide the glue between FAT32 file/directory operations
 // and the Virtual File System (VFS) layer.
