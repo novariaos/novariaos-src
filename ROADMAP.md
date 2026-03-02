@@ -25,7 +25,8 @@
     - [x] Boot sector and FAT parsing
     - [x] Cluster chain management
     - [x] Directory entry reading
-    - [ ] Basic Read/Write operations
+    - [x] Basic Read operations
+    - [x] Basic Write operations
 
 ## Medium Priority
 - [ ] /dev/tty (WIP: current stage — write only)

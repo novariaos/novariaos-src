@@ -19,6 +19,7 @@
 #define VFS_WRITE  0x02
 #define VFS_CREAT  0x04
 #define VFS_APPEND 0x08
+#define VFS_TRUNC  0x10
 
 #define VFS_SEEK_SET 0
 #define VFS_SEEK_CUR 1
@@ -46,6 +47,7 @@
 #define EEXIST  17
 #define EPERM   1
 #define ENODEV  19
+#define EIO     5
 
 // File type bits for st_mode
 #define VFS_S_IFMT   0xF000

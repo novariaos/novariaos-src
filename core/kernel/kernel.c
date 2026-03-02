@@ -82,7 +82,7 @@ void kmain() {
 
     void* initramfs_location = NULL;
     size_t initramfs_size = 0;
-    
+
     if (module_request.response != NULL && module_request.response->module_count > 0) {
         LOG_DEBUG("Checking Limine modules...\n");
 
@@ -132,7 +132,7 @@ void kmain() {
 
     // Register any discovered block devices with the VFS.
     block_dev_vfs_init();
-    
+
     const char* ascii_art[] = {
         " _   _                      _        ___  ____  ",
         "| \\ | | _____   ____ _ _ __(_) __ _ / _ \\/ ___| ",
