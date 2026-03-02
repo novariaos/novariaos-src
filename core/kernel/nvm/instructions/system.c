@@ -1,6 +1,6 @@
 #include <core/kernel/nvm/instructions.h>
 #include <core/kernel/nvm/syscall.h>
-#include <core/kernel/log.h>
+#include <log.h>
 
 bool handle_syscall(nvm_process_t* proc) {
     if(proc->ip < proc->size) {

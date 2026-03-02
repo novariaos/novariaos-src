@@ -1,1 +1,3 @@
-Absolutely all programs here must be written in a language that compiles in NVM, but temporary programs were written as a temporary measure. Now everything is in the kernel, which is not right, but it will be replaced.
+Absolutely all programs here are written in those programming language that can be compiled in NVM bytecode.
+
+If you look for old, internal programs — https://github.com/novariaos/novariaos-src/tree/v0.1.0-alpha/rootfs/usr/src

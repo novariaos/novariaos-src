@@ -47,6 +47,7 @@
 #define EEXIST  17
 #define EPERM   1
 #define ENODEV  19
+#define EISDIR  21
 #define EIO     5
 
 // File type bits for st_mode

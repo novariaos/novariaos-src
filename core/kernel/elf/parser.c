@@ -1,7 +1,7 @@
 #include <core/kernel/elf.h>
 #include <core/kernel/mem.h>
 #include <core/kernel/kstd.h>
-#include <core/kernel/log.h>
+#include <log.h>
 
 bool elf_validate(const uint8_t* data, size_t size) {
     if (size < EI_NIDENT) return false;

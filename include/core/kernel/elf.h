@@ -1,8 +1,8 @@
 #ifndef ELF_H
 #define ELF_H
 
-#include <core/kernel/log.h>
-#include <lib/types.h>
+#include <log.h>
+#include <types.h>
 #include <stdint.h>
 #include <stdbool.h>
 

@@ -2,7 +2,7 @@
 
 #include <core/fs/block.h>
 #include <core/kernel/kstd.h>
-#include <core/kernel/log.h>
+#include <log.h>
 #include <string.h>
 
 static block_device_t block_devices[MAX_BLOCK_DEVICES];

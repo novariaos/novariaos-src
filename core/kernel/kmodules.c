@@ -1,7 +1,7 @@
 #include <core/kernel/elf.h>
 #include <core/kernel/mem.h>
 #include <core/kernel/kstd.h>
-#include <core/kernel/log.h>
+#include <log.h>
 #include <core/fs/vfs.h>
 #include <core/kernel/vge/fb_render.h>
 #include <core/drivers/keyboard.h>

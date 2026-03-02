@@ -4,7 +4,7 @@
 #include <core/fs/devfs.h>
 #include <core/fs/procfs.h>
 #include <core/kernel/kstd.h>
-#include <core/kernel/log.h>
+#include <log.h>
 #include <core/kernel/mem.h>
 #include <stddef.h>
 #include <string.h>

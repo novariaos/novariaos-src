@@ -4,9 +4,9 @@ variables:
   LD: ld
   GRUB_MKRESCUE: grub-mkrescue
   QEMU: qemu-system-x86_64
-  CFLAGS: -I./include/ -I./ -fno-stack-protector -m64 -mcmodel=large -nostdlib -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -c
+  CFLAGS: -I./include/ -I./lib/ -fno-stack-protector -m64 -mcmodel=large -nostdlib -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -c
   ASMFLAGS: -f elf64
-  LDFLAGS: -nostdlib -m elf_x86_64 -T link.ld -z noexecstack
+  LDFLAGS: -nostdlib -m elf_x86_64 -T link.ld -z noexecstack #-Map=kernel.map
   BUILD_DIR: build
   OBJ_DIR: build/objects
   KERNEL_OUT: kernel.bin
@@ -38,9 +38,9 @@ targets:
 
             core/kernel/vge/fb, core/kernel/vge/fb_render, core/kernel/vge/psf, core/kernel/vge/palette,
 
-            core/drivers/serial, core/drivers/timer, core/drivers/keyboard, core/drivers/cdrom,
+            core/drivers/serial, core/drivers/timer, core/drivers/keyboard, core/drivers/cdrom, core/drivers/ramdisk, core/drivers/ide,
 
-            core/fs/ramfs, core/fs/initramfs, core/fs/vfs, core/fs/procfs, core/fs/iso9660, core/fs/devfs,
+            core/fs/vfs, core/fs/procfs, core/fs/iso9660, core/fs/devfs,
             core/fs/block, core/fs/block_dev_vfs, core/fs/bitmap, core/fs/inode, core/fs/dirent, core/fs/fat32,
 
             core/kernel/elf/parser, core/kernel/kmodules,
@@ -49,10 +49,7 @@ targets:
             core/kernel/nvm/instructions/stack, core/kernel/nvm/instructions/flowcontrol,
             core/kernel/nvm/instructions/memory, core/kernel/nvm/instructions/system, core/kernel/nvm/syscalls,
 
-            core/crypto/chacha20, core/crypto/chacha20_rng,
-
-            core/kernel/userspace, rootfs/usr/src/userspace_init, rootfs/usr/src/echo,rootfs/usr/src/clear,
-            rootfs/usr/src/rm, rootfs/usr/src/write, rootfs/usr/src/nova, rootfs/usr/src/uname]
+            core/crypto/chacha20, core/crypto/chacha20_rng]
       cmds:
         - "mkdir -p ${BUILD_DIR}/boot"
         - "${LD} ${LDFLAGS} -o ${BUILD_DIR}/boot/${@} $(echo ${^} | xargs | cut -d ' ' -f2- | xargs printf -- '${OBJ_DIR}/%s.o\\n' | xargs)"
@@ -178,17 +175,17 @@ targets:
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
+  core/drivers/ramdisk:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
+  core/drivers/ide:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
   core/kernel/shell:
-    deps: []
-    cmds:
-      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
-
-  core/fs/ramfs:
-    deps: []
-    cmds:
-      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
-
-  core/fs/initramfs:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
@@ -303,11 +300,6 @@ targets:
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  nvma:
-    deps: []
-    cmds:
-      - "${CC} -o tools/nvma/nvma.bin tools/nvma/src/main.c"
-
   apps:
     deps: [nvma]
     cmds:
@@ -316,8 +308,9 @@ targets:
   iso:
     deps: [prepare, kernel.bin]
     cmds:
+      - "cp limine/limine-bios-cd.bin ${BUILD_DIR}/boot/"
       - "xorriso -as mkisofs -quiet -iso-level 3 -o ${BUILD_DIR}/boot/rootfs.img rootfs/"
-      - "xorriso -as mkisofs -b limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table --protective-msdos-label -iso-level 3 -partition_offset 64 -quiet -o dist/build_${DATE}.iso ${BUILD_DIR}/boot/"
+      - "xorriso -as mkisofs -b limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table --efi-boot limine-bios-cd.bin --efi-boot-part --efi-boot-image --protective-msdos-label -iso-level 3 -partition_offset 64 -quiet -o dist/build_${DATE}.iso ${BUILD_DIR}/boot/"
       - "limine bios-install dist/build_${DATE}.iso"
 
   run:
@@ -338,6 +331,21 @@ targets:
         sh -c 'mkdir -p rootfs/etc && echo
         "NAME=${OS_NAME}\nVERSION=\"${OS_VERSION}\"\nID=${OS_ID}\nANSI_COLOR=\"${OS_COLOR}\"\nPRETTY_NAME=\"${OS_NAME} ${OS_VERSION}-RELEASE\"\nHOME_URL=\"https://novariaos.github.io/\"\nBUG_REPORT_URL=\"https://github.com/novariaos/novariaos-src/issues\""
         > rootfs/etc/os-release'
+      - "cp limine/limine-bios-cd.bin ${BUILD_DIR}/boot/"
       - "xorriso -as mkisofs -quiet -iso-level 3 -o ${BUILD_DIR}/boot/rootfs.img rootfs/"
-      - "xorriso -as mkisofs -b limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table --protective-msdos-label -iso-level 3 -partition_offset 64 -quiet -o dist/${OS_NAME}-${OS_VERSION}-${OS_STAGE}-amd64-memstick.iso ${BUILD_DIR}/boot/"
-      - "limine bios-install dist/${OS_NAME}-${OS_VERSION}-${OS_STAGE}-amd64-memstick.iso"
+      - >
+        xorriso -as mkisofs
+        -b limine-bios-cd.bin
+        -no-emul-boot
+        -boot-load-size 4
+        -boot-info-table
+        --efi-boot limine-bios-cd.bin
+        --efi-boot-part
+        --efi-boot-image
+        --protective-msdos-label
+        -iso-level 3
+        -partition_offset 64
+        -quiet
+        -o dist/${OS_NAME}-${OS_VERSION}-${OS_STAGE}-amd64.iso
+        ${BUILD_DIR}/boot/
+      - "limine bios-install dist/${OS_NAME}-${OS_VERSION}-${OS_STAGE}-amd64.iso"

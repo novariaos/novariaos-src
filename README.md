@@ -1,8 +1,8 @@
 # NovariaOS
 <p align="center">
     <img src="https://img.shields.io/badge/NovariaOS-EXPERIMENTAL-fbb714?style=for-the-badge">
-    <img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/z3nnix/NovariaOS?style=for-the-badge&label=Stars">
-    <img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/z3nnix/NovariaOS?style=for-the-badge&label=Commit%20activity">
+    <img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/novariaos/novariaos-src?style=for-the-badge&label=Stars">
+    <img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/novariaos/novariaos-src?style=for-the-badge&label=Commit%20activity">
     <a href="https://novariaos.github.io/docs.html"><img src="https://img.shields.io/badge/Documentation-0377b8?style=for-the-badge"></a>
     <a href="https://t.me/NovariaOS"><img src="https://img.shields.io/badge/Telegram-0088CC?style=for-the-badge"></a>
 </div>

@@ -29,9 +29,11 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
                 proc->exit_code = 0;
             }
             proc->active = false;
-
             procfs_unregister(proc->pid);
-            kfree(proc->bytecode);
+            if (proc->bytecode) {
+                // kfree(proc->bytecode);
+                proc->bytecode = NULL;
+            }
             if(proc->sp > 0) proc->sp--;
             break;
         }
@@ -55,6 +57,7 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
             char* argv[argc];
             int arg_index = 0;
             int stack_pos = proc->sp - 1;
+            int alloc_error = 0;
             
             while (arg_index < argc && stack_pos >= 0) {
                 int end_pos = stack_pos;
@@ -69,14 +72,14 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
                 }
                 
                 if (start_pos == -1 || start_pos > end_pos) {
-                    result = -1;
+                    alloc_error = 1;
                     break;
                 }
 
                 int len = end_pos - start_pos + 1;
                 argv[arg_index] = kmalloc(len + 1);
                 if (!argv[arg_index]) {
-                    result = -1;
+                    alloc_error = 1;
                     break;
                 }
 
@@ -89,10 +92,12 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
                 stack_pos = start_pos - 2;
             }
             
-            if (result == -1) {
+            if (alloc_error) {
                 for (int i = 0; i < arg_index; i++) {
                     kfree(argv[i]);
+                    argv[i] = NULL;
                 }
+                result = -1;
                 break;
             }
 
@@ -106,6 +111,7 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
             if (!bytecode) {
                 for (int i = 0; i < argc; i++) {
                     kfree(argv[i]);
+                    argv[i] = NULL;
                 }
                 result = -1;
                 break;
@@ -124,8 +130,10 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
                     uint8_t* new_bytecode = kmalloc(allocated_size);
                     if (!new_bytecode) {
                         kfree(bytecode);
+                        bytecode = NULL;
                         for (int i = 0; i < argc; i++) {
                             kfree(argv[i]);
+                            argv[i] = NULL;
                         }
                         result = -1;
                         break;
@@ -144,6 +152,10 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
             }
             
             if (result == -1) {
+                if (bytecode) {
+                    kfree(bytecode);
+                    bytecode = NULL;
+                }
                 break;
             }
 
@@ -156,48 +168,81 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
             int32_t* initial_stack = kmalloc(stack_size * sizeof(int32_t));
             if (!initial_stack) {
                 kfree(bytecode);
+                bytecode = NULL;
                 for (int i = 0; i < argc; i++) {
                     kfree(argv[i]);
+                    argv[i] = NULL;
                 }
                 result = -1;
                 break;
             }
 
-            stack_pos = 0;
-            initial_stack[stack_pos++] = argc;
+            int stack_pos_init = 0;
+            initial_stack[stack_pos_init++] = argc;
 
-            int argv_pointers_start = stack_pos;
-            stack_pos += argc;
+            int argv_pointers_start = stack_pos_init;
+            stack_pos_init += argc;
 
             for (int i = 0; i < argc; i++) {
-                initial_stack[argv_pointers_start + i] = stack_pos;
+                initial_stack[argv_pointers_start + i] = stack_pos_init;
                 
                 char* arg = argv[i];
                 for (int j = 0; arg[j] != '\0'; j++) {
-                    initial_stack[stack_pos++] = (int32_t)(uint8_t)arg[j];
+                    if (stack_pos_init >= stack_size) {
+                        kfree(bytecode);
+                        bytecode = NULL;
+                        kfree(initial_stack);
+                        initial_stack = NULL;
+                        for (int i = 0; i < argc; i++) {
+                            kfree(argv[i]);
+                            argv[i] = NULL;
+                        }
+                        result = -1;
+                        break;
+                    }
+                    initial_stack[stack_pos_init++] = (int32_t)(uint8_t)arg[j];
                 }
-                initial_stack[stack_pos++] = 0;
+                if (stack_pos_init >= stack_size) {
+                    kfree(bytecode);
+                    bytecode = NULL;
+                    kfree(initial_stack);
+                    initial_stack = NULL;
+                    for (int i = 0; i < argc; i++) {
+                        kfree(argv[i]);
+                        argv[i] = NULL;
+                    }
+                    result = -1;
+                    break;
+                }
+                initial_stack[stack_pos_init++] = 0;
+            }
+            
+            if (result == -1) {
+                break;
             }
 
             int new_pid = nvm_create_process_with_stack(bytecode, bytecode_size,
                                                     (uint16_t[]){CAPS_NONE}, 1,
-                                                    initial_stack, stack_pos);
+                                                    initial_stack, stack_pos_init);
             kfree(initial_stack);
-            caps_copy(nvm_get_process(proc->pid), nvm_get_process(new_pid));
-
+            initial_stack = NULL;
+            
             if (new_pid < 0) {
                 kfree(bytecode);
+                bytecode = NULL;
                 for (int i = 0; i < argc; i++) {
                     kfree(argv[i]);
+                    argv[i] = NULL;
                 }
                 result = -1;
                 break;
             }
 
-            // kfree(bytecode); - УДАЛЕНО ДЛЯ ИСПРАВЛЕНИЯ USE-AFTER-FREE
+            caps_copy(nvm_get_process(proc->pid), nvm_get_process(new_pid));
 
             for (int i = 0; i < argc; i++) {
                 kfree(argv[i]);
+                argv[i] = NULL;
             }
 
             result = new_pid;
@@ -233,7 +278,7 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
             char filename[MAX_FILENAME];
             int pos = 0;
        
-            for (int i = start_pos - 1; i > null_pos && pos < MAX_FILENAME - 1; i--) {
+            for (int i = null_pos + 1; i < start_pos && pos < MAX_FILENAME - 1; i++) {
                 char ch = proc->stack[i] & 0xFF;
                 filename[pos++] = ch;
             }
@@ -274,7 +319,7 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
                 if (bytes == 1) {
                     result = (unsigned char)buffer;
                 } else if (bytes == 0) {
-                    result = 0;  // EOF
+                    result = 0;
                 } else {
                     result = -1;
                 }
@@ -318,38 +363,38 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
         }
 
         case SYS_MSG_SEND: {
-                if (proc->sp < 2) {
-                    result = -1;
-                    break;
-                }
-
-                uint16_t recipient = proc->stack[proc->sp - 2] & 0xFFFF;
-                uint8_t content = proc->stack[proc->sp - 1] & 0xFF;
-
-                if (message_count >= MAX_MESSAGES) {
-                    result = -1;
-                    break;
-                }
-
-                message_t msg;
-                msg.recipient = recipient;
-                msg.sender = proc->pid;
-                msg.content = content;
-                
-                message_queue[message_count] = msg;
-                message_count++;
-
-                for (int i = 0; i < MAX_PROCESSES; i++) {
-                    if (processes[i].active && processes[i].pid == recipient && processes[i].blocked) {
-                        processes[i].blocked = false; 
-                        processes[i].wakeup_reason = 1;
-                        break;
-                    }
-                }
-
-                proc->sp -= 2;
+            if (proc->sp < 2) {
+                result = -1;
                 break;
             }
+
+            uint16_t recipient = proc->stack[proc->sp - 2] & 0xFFFF;
+            uint8_t content = proc->stack[proc->sp - 1] & 0xFF;
+
+            if (message_count >= MAX_MESSAGES) {
+                result = -1;
+                break;
+            }
+
+            message_t msg;
+            msg.recipient = recipient;
+            msg.sender = proc->pid;
+            msg.content = content;
+            
+            message_queue[message_count] = msg;
+            message_count++;
+
+            for (int i = 0; i < MAX_PROCESSES; i++) {
+                if (processes[i].active && processes[i].pid == recipient && processes[i].blocked) {
+                    processes[i].blocked = false; 
+                    processes[i].wakeup_reason = 1;
+                    break;
+                }
+            }
+
+            proc->sp -= 2;
+            break;
+        }
 
         case SYS_MSG_RECEIVE: {
             int found_index = -1;
@@ -366,6 +411,11 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
                 break;
             }
             
+            if (proc->sp + 1 >= STACK_SIZE) {
+                result = -1;
+                break;
+            }
+            
             message_t received_msg = message_queue[found_index];
             
             for (int i = found_index; i < message_count - 1; i++) {
@@ -373,14 +423,9 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
             }
             message_count--;
 
-            if (proc->sp + 1 < STACK_SIZE) {
-                proc->stack[proc->sp] = received_msg.sender;
-                proc->stack[proc->sp + 1] = received_msg.content;
-                proc->sp += 2;
-            } else {
-                result = -1;
-                break;
-            }
+            proc->stack[proc->sp] = received_msg.sender;
+            proc->stack[proc->sp + 1] = received_msg.content;
+            proc->sp += 2;
             break;
         }
 
@@ -402,7 +447,10 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
         }
 
         case SYS_PORT_OUT_BYTE: {
-            if (!caps_has_capability(proc, CAP_DRV_ACCESS)) { result = -1; break; }
+            if (!caps_has_capability(proc, CAP_DRV_ACCESS)) {
+                result = -1;
+                break;
+            }
             if (proc->sp < 2) {
                 result = -1;
                 break;

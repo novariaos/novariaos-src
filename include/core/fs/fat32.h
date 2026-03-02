@@ -193,6 +193,9 @@ int fat32_lookup(fat32_fs_t* fs, uint32_t dir_cluster,
                  const char* name, fat32_entry_t* out);
 
 // --- VFS interface ---
+//
+// These functions provide the glue between FAT32 file/directory operations
+// and the Virtual File System (VFS) layer.
 
 // Per-open-file state stored in vfs_file_handle_t::private_data.
 typedef struct {
@@ -203,18 +206,33 @@ typedef struct {
     uint32_t dir_entry_index;   // Index of the dir entry within that cluster
 } fat32_file_handle_t;
 
-// File operations
-int fat32_vfs_open(vfs_mount_t* mnt, const char* path, int flags,
-                   vfs_file_handle_t* h);
+// Open a file and populate the file handle. Allocates private_data (fat32_entry_t).
+// Returns 0 on success, negative error code otherwise.
+int fat32_vfs_open(vfs_mount_t* mnt, const char* path, int flags, vfs_file_handle_t* h);
+
+// Close a file handle and free associated private_data.
+// Returns 0 on success, negative error code otherwise.
 int fat32_vfs_close(vfs_mount_t* mnt, vfs_file_handle_t* h);
+
+// Read up to @count bytes from the file at h->position into @buf.
+// Advances h->position by the number of bytes actually read.
+// Returns number of bytes read (0 = EOF), or negative error code.
 vfs_ssize_t fat32_vfs_read(vfs_mount_t* mnt, vfs_file_handle_t* h,
                             void* buf, size_t count);
+
+// Write up to @count bytes from @buf to the file at h->position.
+// Advances h->position and extends the file if needed.
+// Returns number of bytes written, or negative error code.
 vfs_ssize_t fat32_vfs_write(vfs_mount_t* mnt, vfs_file_handle_t* h,
                              const void* buf, size_t count);
+
+// Seek within the file. Supports seek past EOF (extends on next write).
+// Returns new position, or negative error code.
 vfs_off_t fat32_vfs_seek(vfs_mount_t* mnt, vfs_file_handle_t* h,
                           vfs_off_t offset, int whence);
 
-// Directory and metadata operations
+// Read directory contents through VFS interface.
+// Returns the number of entries read, or negative error code.
 int fat32_vfs_readdir(vfs_mount_t* mnt, const char* path,
                       vfs_dirent_t* entries, size_t max_entries);
 int fat32_vfs_stat(vfs_mount_t* mnt, const char* path, vfs_stat_t* stat);

@@ -5,7 +5,7 @@
 #include <core/kernel/nvm/nvm.h>
 #include <core/kernel/nvm/caps.h>
 #include <core/kernel/kstd.h>
-#include <core/kernel/log.h>
+#include <log.h>
 #include <core/fs/procfs.h>
 #include <stdint.h>
 
