@@ -26,7 +26,10 @@
     - [x] Cluster chain management
     - [x] Directory entry reading
     - [x] Basic Read operations
-    - [ ] Basic Write operations
+    - [x] Basic Write operations
+    - [ ] Directory creation (mkdir)
+    - [ ] Directory removal (rmdir)
+    - [ ] File deletion (unlink)
 
 - [ ] IDE/ATA Disk Driver
     - [x] ATA PIO detection (IDENTIFY)

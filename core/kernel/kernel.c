@@ -84,7 +84,7 @@ static void early_init(void) {
 static void fs_init(void) {
     vfs_init();
     block_init();
-    
+
     ide_init();
     fat32_init();
 
@@ -137,7 +137,7 @@ static void process_boot_modules(void) {
         iso9660_init(iso_location, iso_size);
         iso9660_mount_to_vfs("/", "/");
         LOG_DEBUG("ISO9660 filesystem mounted to /\n");
-        
+
         vfs_list();
         init_vge_font();
         palette_init();
@@ -162,7 +162,7 @@ static void load_kernel_modules(void) {
                 const char* n = name;
                 while (*n) *p++ = *n++;
                 *p = '\0';
-                
+
                 kmodule_load(path);
             }
         }
@@ -179,15 +179,15 @@ void limine_smp_entry(struct limine_mp_info *info) {
 
 void kmain() {
     early_init();
-    
+
     // Subsystem initialization
     syslog_init();
     keyboard_init();
     nvm_init();
-    
+
     // Filesystem initialization
     fs_init();
-    
+
     // Process boot modules (mounts rootfs)
     process_boot_modules();
 
@@ -196,7 +196,7 @@ void kmain() {
 
     // Load kernel modules from filesystem
     load_kernel_modules();
-    
+
     // Start user interface
     shell_init();
     shell_run();
