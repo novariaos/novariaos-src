@@ -27,8 +27,8 @@
     - [x] Directory entry reading
     - [x] Basic Read operations
     - [x] Basic Write operations
-    - [ ] Directory creation (mkdir)
-    - [ ] Directory removal (rmdir)
+    - [x] Directory creation (mkdir)
+    - [x] Directory removal (rmdir)
     - [ ] File deletion (unlink)
 
 - [ ] IDE/ATA Disk Driver
