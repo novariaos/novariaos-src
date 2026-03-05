@@ -532,9 +532,17 @@ vfs_off_t vfs_seek(int fd, vfs_off_t offset, int whence) {
 }
 
 int vfs_delete(const char* filename) {
+    /* Try mounted filesystem first. */
+    const char* rel_path;
+    vfs_mount_t* mnt = vfs_find_mount(filename, &rel_path);
+    if (mnt && mnt->fs && mnt->fs->ops && mnt->fs->ops->unlink) {
+        return mnt->fs->ops->unlink(mnt, rel_path);
+    }
+
+    /* Fallback: legacy in-memory file table. */
     for (int i = 0; i < MAX_FILES; i++) {
         if (files[i].used && strcmp(files[i].name, filename) == 0) {
-            
+
             for (int j = 0; j < MAX_HANDLES; j++) {
                 if (handles[j].used && handles[j].file == &files[i]) {
                     handles[j].used = false;
@@ -542,7 +550,7 @@ int vfs_delete(const char* filename) {
                     handles[j].file = NULL;
                 }
             }
-            
+
             files[i].used = false;
             files[i].size = 0;
             files[i].name[0] = '\0';
@@ -556,8 +564,8 @@ int vfs_delete(const char* filename) {
             return 0;
         }
     }
-    
-    return -1;
+
+    return -ENOENT;
 }
 
 int vfs_rmdir(const char* dirname) {

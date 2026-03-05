@@ -29,7 +29,7 @@
     - [x] Basic Write operations
     - [x] Directory creation (mkdir)
     - [x] Directory removal (rmdir)
-    - [ ] File deletion (unlink)
+    - [x] File deletion (unlink)
 
 - [ ] IDE/ATA Disk Driver
     - [x] ATA PIO detection (IDENTIFY)

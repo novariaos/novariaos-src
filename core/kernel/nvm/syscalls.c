@@ -362,6 +362,46 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
             break;
         }
 
+        case SYS_DELETE: {
+            if (!caps_has_capability(proc, CAP_FS_DELETE)) {
+                result = -1;
+                break;
+            }
+
+            if (proc->sp < 1) {
+                result = -1;
+                break;
+            }
+
+            int start_pos = proc->sp;
+            int null_pos = -1;
+
+            for (int i = proc->sp - 1; i >= 0; i--) {
+                if ((proc->stack[i] & 0xFF) == 0) {
+                    null_pos = i;
+                    break;
+                }
+            }
+
+            if (null_pos == -1) {
+                result = -1;
+                break;
+            }
+
+            char filename[MAX_FILENAME];
+            int pos = 0;
+
+            for (int i = null_pos + 1; i < start_pos && pos < MAX_FILENAME - 1; i++) {
+                filename[pos++] = proc->stack[i] & 0xFF;
+            }
+            filename[pos] = '\0';
+
+            proc->sp = null_pos;
+
+            result = vfs_delete(filename);
+            break;
+        }
+
         case SYS_MSG_SEND: {
             if (proc->sp < 2) {
                 result = -1;

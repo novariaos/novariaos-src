@@ -1609,6 +1609,90 @@ scan_done:
     return 0;
 }
 
+/*
+ * fat32_vfs_unlink - Delete the regular file at @path.
+ *
+ * Verifies the path exists and is a regular file (not a directory).
+ * Then marks its parent directory entry as deleted and frees its
+ * cluster chain.
+ */
+static int fat32_vfs_unlink(vfs_mount_t* mnt, const char* path) {
+    if (!mnt || !mnt->fs_private || !path) return -EINVAL;
+
+    fat32_fs_t* fs = (fat32_fs_t*)mnt->fs_private;
+
+    /* Resolve the target and verify it is a regular file. */
+    fat32_entry_t entry;
+    int rc = fat32_resolve_path(fs, path, &entry);
+    if (rc != 0) return rc;
+    if (entry.is_dir) return -EISDIR;
+
+    /* Locate the entry in the parent directory and mark it deleted. */
+    uint32_t parent_cluster;
+    const char* filename;
+    rc = fat32_resolve_parent_cluster(fs, path, &parent_cluster, &filename);
+    if (rc != 0) return rc;
+
+    char name83[8], ext83[3];
+    rc = fat32_name_to_83(filename, name83, ext83);
+    if (rc != 0) return rc;
+
+    uint8_t* cluster_buf = kmalloc(fs->bytes_per_cluster);
+    if (!cluster_buf) return -ENOMEM;
+
+    uint32_t cluster = parent_cluster;
+    size_t max_iterations = fs->total_clusters + 1;
+    bool found = false;
+
+    while (!found && cluster >= 2 && !fat32_is_eoc(cluster) &&
+           !fat32_is_bad(cluster) && max_iterations-- > 0) {
+        rc = fat32_read_cluster(fs, cluster, cluster_buf);
+        if (rc != 0) { kfree(cluster_buf); return rc; }
+
+        size_t epc = fs->bytes_per_cluster / sizeof(fat32_dir_entry_t);
+
+        for (size_t i = 0; i < epc; i++) {
+            fat32_dir_entry_t* de = (fat32_dir_entry_t*)(cluster_buf +
+                                    i * sizeof(fat32_dir_entry_t));
+            uint8_t first = (uint8_t)de->name[0];
+
+            if (first == FAT_ENTRY_END) goto unlink_scan_done;
+            if (first == FAT_ENTRY_FREE) continue;
+            if ((de->attr & FAT_ATTR_LONG_NAME_MASK) == FAT_ATTR_LONG_NAME) continue;
+            if (de->attr & FAT_ATTR_DIRECTORY) continue;
+
+            if (memcmp(de->name, name83, 8) == 0 && memcmp(de->ext, ext83, 3) == 0) {
+                de->name[0] = (char)FAT_ENTRY_FREE;
+                rc = fat32_write_cluster(fs, cluster, cluster_buf);
+                if (rc != 0) { kfree(cluster_buf); return rc; }
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            uint32_t next;
+            rc = fat32_read_fat_entry(fs, cluster, &next);
+            if (rc != 0) { kfree(cluster_buf); return rc; }
+            cluster = next;
+        }
+    }
+
+unlink_scan_done:
+    kfree(cluster_buf);
+
+    if (!found) return -ENOENT;
+
+    /* Free all clusters belonging to the deleted file. */
+    if (entry.first_cluster >= 2) {
+        rc = fat32_free_chain(fs, entry.first_cluster);
+        if (rc != 0) return rc;
+    }
+
+    LOG_DEBUG("fat32_vfs_unlink: deleted file '%s'\n", path);
+    return 0;
+}
+
 static const vfs_fs_ops_t fat32_ops = {
     .name    = "fat32",
     .mount   = fat32_mount,
@@ -1622,7 +1706,7 @@ static const vfs_fs_ops_t fat32_ops = {
     .rmdir   = fat32_vfs_rmdir,
     .readdir = fat32_vfs_readdir,
     .stat    = fat32_vfs_stat,
-    .unlink  = NULL,
+    .unlink  = fat32_vfs_unlink,
     .ioctl   = NULL,
     .sync    = NULL,
 };
