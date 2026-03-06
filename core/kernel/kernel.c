@@ -19,10 +19,15 @@
 #include <core/fs/block_dev_vfs.h>
 #include <core/fs/block.h>
 #include <core/fs/fat32.h>
+#include <core/fs/ext2.h>
 #include <stddef.h>
 #include <stdbool.h>
 #include <limine.h>
 #include <core/kernel/elf.h>
+#include <core/arch/smp.h>
+#include <core/arch/work_queue.h>
+#include <core/kernel/mem/slab.h>
+#include <core/kernel/mem/cpu_pool.h>
 
 // Limine requests
 static volatile struct limine_module_request module_request = {
@@ -87,6 +92,7 @@ static void fs_init(void) {
 
     ide_init();
     fat32_init();
+    ext2_init();
 
     block_dev_vfs_init();
 }
@@ -180,12 +186,15 @@ void limine_smp_entry(struct limine_mp_info *info) {
 void kmain() {
     early_init();
 
-    // Subsystem initialization
     syslog_init();
     keyboard_init();
     nvm_init();
 
-    // Filesystem initialization
+    smp_init(smp_request.response);
+    wq_init();
+    slab_cpu_init(0);
+    cpu_pool_init(0);
+
     fs_init();
 
     // Process boot modules (mounts rootfs)

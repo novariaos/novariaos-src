@@ -10,60 +10,142 @@
 #include <core/kernel/nvm/nvm.h>
 #include <core/kernel/nvm/caps.h>
 #include <core/kernel/userspace.h>
+#include <log.h>
+#include <core/arch/work_queue.h>
+#include <core/arch/smp.h>
+#include <core/kernel/mem/slab.h>
 
 #define MAX_COMMAND_LENGTH 256
-#define MAX_PATH_LENGTH 64
+#define MAX_PATH_LENGTH 256
 
 static char current_working_directory[MAX_PATH_LENGTH] = "/";
 
 static void cmd_help(void) {
     kprint("Built-in commands:\n", 7);
-    kprint("  help     - Show this help message\n", 7);
-    kprint("  pwd      - Print working directory\n", 7);
-    kprint("  ls       - List directory contents\n", 7);
-    kprint("  cat      - Display file contents\n", 7);
-    kprint("  cd       - Change directory\n", 7);
+    kprint("  help               - Show this help message\n", 7);
+    kprint("  pwd                - Print working directory\n", 7);
+    kprint("  ls                 - List directory contents\n", 7);
+    kprint("  cat                - Display file contents\n", 7);
+    kprint("  cd                 - Change directory\n", 7);
+    kprint("  echo [text] [> file] - Print text or write to file\n", 7);
+    kprint("  mount <fs> <dev> <mntpoint> - Mount filesystem\n", 7);
+    kprint("  umount <mntpoint>  - Unmount filesystem\n", 7);
     kprint("\n", 7);
+}
+
+static void cmd_mount(int argc, char* argv[]) {
+    if (argc < 4) {
+        kprint("Usage: mount <fstype> <device> <mountpoint>\n", 7);
+        kprint("  e.g. mount ext2 hda /mnt/disk\n", 7);
+        return;
+    }
+    const char* fstype = argv[1];
+    const char* device = argv[2];
+    const char* mntpoint = argv[3];
+
+    vfs_mkdir(mntpoint);
+
+    int rc = vfs_mount_fs(fstype, mntpoint, device, 0, NULL);
+    if (rc == 0) {
+        kprint("Mounted ", 7);
+        kprint(device, 15);
+        kprint(" (", 7);
+        kprint(fstype, 15);
+        kprint(") at ", 7);
+        kprint(mntpoint, 11);
+        kprint("\n", 7);
+    } else {
+        kprint("mount: failed (", 7);
+        char errbuf[12];
+        itoa(-rc, errbuf, 10);
+        kprint(errbuf, 12);
+        kprint(")\n", 7);
+    }
+}
+
+static void cmd_umount(int argc, char* argv[]) {
+    if (argc < 2) {
+        kprint("Usage: umount <mountpoint>\n", 7);
+        return;
+    }
+    int rc = vfs_umount(argv[1]);
+    if (rc == 0) {
+        kprint("Unmounted ", 7);
+        kprint(argv[1], 11);
+        kprint("\n", 7);
+    } else {
+        kprint("umount: failed (", 7);
+        char errbuf[12];
+        itoa(-rc, errbuf, 10);
+        kprint(errbuf, 12);
+        kprint(")\n", 7);
+    }
 }
 
 static void cmd_cat(const char* args) {
     const char* path = args;
     while (*path == ' ') path++;
-    
+
     if (*path == '\0') {
         kprint("cat: Usage: cat <filename>\n", 7);
         return;
     }
-    
+
     char full_path[MAX_PATH_LENGTH];
-    
     if (path[0] == '/') {
         strcpy(full_path, path);
     } else {
         strcpy(full_path, current_working_directory);
-        if (full_path[strlen(full_path)-1] != '/') {
+        if (full_path[strlen(full_path)-1] != '/')
             strcat(full_path, "/");
-        }
         strcat(full_path, path);
+    }
+
+    {
+        const char* rel = NULL;
+        vfs_mount_t* mnt = vfs_find_mount(full_path, &rel);
+        if (mnt && mnt->fs && mnt->fs->ops) {
+            const vfs_fs_ops_t* ops = mnt->fs->ops;
+            char rel_path[MAX_PATH_LENGTH];
+            rel_path[0] = '/';
+            strcpy_safe(rel_path + 1, rel, MAX_PATH_LENGTH - 1);
+
+            vfs_stat_t st;
+            int src = ops->stat ? ops->stat(mnt, rel_path, &st) : -1;
+            if (src == 0 && (st.st_mode & 0xF000) != 0x4000) { // not a dir
+                vfs_file_handle_t h;
+                memset(&h, 0, sizeof(h));
+                h.position = 0;
+                h.flags = VFS_READ;
+                int rc = ops->open ? ops->open(mnt, rel_path, VFS_READ, &h) : -1;
+                if (rc == 0) {
+                    char buf[256];
+                    vfs_ssize_t n;
+                    while ((n = ops->read(mnt, &h, buf, sizeof(buf))) > 0) {
+                        for (vfs_ssize_t i = 0; i < n; i++) {
+                            char c[2] = {buf[i], '\0'};
+                            kprint(c, 15);
+                        }
+                    }
+                    if (ops->close) ops->close(mnt, &h);
+                    kprint("\n", 7);
+                    return;
+                }
+            }
+        }
     }
 
     size_t size;
     const char* data = vfs_read(full_path, &size);
-
     if (data == NULL) {
         kprint("cat: ", 7);
-        kprint(path, 7);
+        kprint(full_path, 7);
         kprint(": No such file or directory\n", 7);
         return;
     }
-
     for (size_t i = 0; i < size; i++) {
         char c[2] = {data[i], '\0'};
-        if (data[i] == '\n') {
-            kprint("\n", 7);
-        } else {
-            kprint(c, 15);
-        }
+        kprint(c, 15);
     }
     kprint("\n", 7);
 }
@@ -72,36 +154,56 @@ static void cmd_ls(const char* args) {
     const char* path = args;
     while (*path == ' ') path++;
 
+    char full_path[MAX_PATH_LENGTH];
     if (*path == '\0') {
-        path = current_working_directory;
+        strcpy(full_path, current_working_directory);
+    } else if (path[0] == '/') {
+        strcpy(full_path, path);
+    } else {
+        strcpy(full_path, current_working_directory);
+        if (full_path[strlen(full_path)-1] != '/')
+            strcat(full_path, "/");
+        strcat(full_path, path);
     }
 
-    vfs_file_t* files = vfs_get_files();
-    int dir_len = strlen(path);
-
-    char normalized_dir[64];
-    size_t i = 0;
-    while (path[i] && i < 63) {
-        normalized_dir[i] = path[i];
-        i++;
-    }
-    normalized_dir[i] = '\0';
-
-    if (dir_len > 1 && normalized_dir[dir_len - 1] == '/') {
-        normalized_dir[dir_len - 1] = '\0';
-        dir_len--;
-    }
+    size_t flen = strlen(full_path);
+    if (flen > 1 && full_path[flen-1] == '/')
+        full_path[--flen] = '\0';
 
     int found_count = 0;
 
-    for (size_t i = 0; i < 128; i++) {
+    vfs_dirent_t* entries = kmalloc(32 * sizeof(vfs_dirent_t));
+    if (!entries) { kprint("ls: out of memory\n", 7); return; }
+    int n = vfs_readdir(full_path, entries, 32);
+    if (n > 0) {
+        for (int i = 0; i < n; i++) {
+            if (entries[i].d_type == VFS_TYPE_DIR) {
+                kprint(entries[i].d_name, 9);
+                kprint("/", 9);
+            } else {
+                kprint(entries[i].d_name, 15);
+            }
+            kprint("    ", 7);
+            found_count++;
+        }
+        kfree(entries);
+        kprint("\n", 7);
+        return;
+    }
+    kfree(entries);
+
+    // Fallback: legacy in-memory VFS
+    vfs_file_t* files = vfs_get_files();
+    int dir_len = (int)flen;
+
+    for (size_t i = 0; i < MAX_FILES; i++) {
         if (!files[i].used) continue;
 
         const char* name = files[i].name;
         bool should_show = false;
         const char* display_name = name;
 
-        if (dir_len == 1 && normalized_dir[0] == '/') {
+        if (dir_len == 1 && full_path[0] == '/') {
             if (name[0] == '/' && name[1] != '\0') {
                 int slash_count = 0;
                 for (int j = 1; name[j] != '\0'; j++) {
@@ -114,17 +216,13 @@ static void cmd_ls(const char* args) {
             }
         } else {
             size_t name_len = strlen(name);
-
-            if (name_len > dir_len && name[dir_len] == '/') {
+            if (name_len > (size_t)dir_len && name[dir_len] == '/') {
                 bool match = true;
-                for (size_t j = 0; j < dir_len; j++) {
-                    if (name[j] != normalized_dir[j]) {
-                        match = false;
-                        break;
-                    }
+                for (int j = 0; j < dir_len; j++) {
+                    if (name[j] != full_path[j]) { match = false; break; }
                 }
                 if (match) {
-                    size_t slash_count = 0;
+                    int slash_count = 0;
                     for (size_t j = dir_len + 1; name[j] != '\0'; j++) {
                         if (name[j] == '/') slash_count++;
                     }
@@ -142,12 +240,91 @@ static void cmd_ls(const char* args) {
                 kprint(display_name, 9);
                 kprint("/", 9);
             } else {
-                kprint(display_name, 7);
+                kprint(display_name, 15);
             }
             kprint("    ", 7);
         }
     }
     kprint("\n", 7);
+}
+
+static void cmd_echo(int argc, char* argv[]) {
+    const char* redirect_file = NULL;
+    int append = 0;
+    int text_end = argc;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], ">") == 0 || strcmp(argv[i], ">>") == 0) {
+            append = (argv[i][1] == '>') ? 1 : 0;
+            if (i + 1 < argc) {
+                redirect_file = argv[i + 1];
+            }
+            text_end = i;
+            break;
+        }
+    }
+
+    char text[MAX_COMMAND_LENGTH];
+    int tlen = 0;
+    for (int i = 1; i < text_end; i++) {
+        if (i > 1) text[tlen++] = ' ';
+        const char* w = argv[i];
+        while (*w && tlen < MAX_COMMAND_LENGTH - 2) text[tlen++] = *w++;
+    }
+    text[tlen++] = '\n';
+    text[tlen] = '\0';
+
+    if (!redirect_file) {
+        kprint(text, 15);
+        return;
+    }
+
+    char full_path[MAX_PATH_LENGTH];
+    if (redirect_file[0] == '/') {
+        strcpy_safe(full_path, redirect_file, MAX_PATH_LENGTH);
+    } else {
+        strcpy_safe(full_path, current_working_directory, MAX_PATH_LENGTH);
+        if (full_path[strlen(full_path)-1] != '/')
+            strcat(full_path, "/");
+        strcat(full_path, redirect_file);
+    }
+
+    const char* rel = NULL;
+    vfs_mount_t* mnt = vfs_find_mount(full_path, &rel);
+    if (mnt && mnt->fs && mnt->fs->ops && mnt->fs->ops->open &&
+        mnt->fs->ops->write && mnt->fs->ops->close) {
+        const vfs_fs_ops_t* ops = mnt->fs->ops;
+        char rel_path[MAX_PATH_LENGTH];
+        rel_path[0] = '/';
+        strcpy_safe(rel_path + 1, rel, MAX_PATH_LENGTH - 1);
+
+        int flags = VFS_WRITE | VFS_CREAT | (append ? VFS_APPEND : VFS_TRUNC);
+        vfs_file_handle_t h;
+        memset(&h, 0, sizeof(h));
+        h.flags = flags;
+
+        int rc = ops->open(mnt, rel_path, flags, &h);
+        if (rc != 0) {
+            kprint("echo: open failed (", 7);
+            char eb[12]; itoa(-rc, eb, 10);
+            kprint(eb, 12);
+            kprint(") fs=", 7);
+            kprint(mnt->fs->name, 15);
+            kprint(" path=", 7);
+            kprint(rel_path, 15);
+            kprint("\n", 7);
+            return;
+        }
+        ops->write(mnt, &h, text, tlen);
+        ops->close(mnt, &h);
+    } else {
+        if (!mnt)
+            kprint("echo: no mount found for path\n", 7);
+        else if (!mnt->fs->ops->open)
+            kprint("echo: filesystem has no write support\n", 7);
+        else
+            kprint("echo: no writable filesystem at path\n", 7);
+    }
 }
 
 static int parse_command(const char* command, char* argv[], int max_args) {
@@ -225,9 +402,7 @@ static void execute_command(const char* command) {
     if (strcmp(argv[0], "help") == 0) {
         cmd_help();
     } else if (strcmp(argv[0], "#") == 0 ) {}
-    else if (strcmp(argv[0], "memtest") == 0) {
-        memory_test();
-    } else if (strcmp(argv[0], "memleak") == 0) {
+    else if (strcmp(argv[0], "memleak") == 0) {
         check_memory_leaks();
     } else if (strcmp(argv[0], "clear") == 0) {
         clear_screen();
@@ -248,6 +423,12 @@ static void execute_command(const char* command) {
         }
     } else if (strcmp(argv[0], "cd") == 0) {
         shell_set_cwd(argv[1]);
+    } else if (strcmp(argv[0], "echo") == 0) {
+        cmd_echo(argc, argv);
+    } else if (strcmp(argv[0], "mount") == 0) {
+        cmd_mount(argc, argv);
+    } else if (strcmp(argv[0], "umount") == 0) {
+        cmd_umount(argc, argv);
     } else {
         char bin_path[64];
         int len = strlen(argv[0]);

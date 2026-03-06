@@ -1,9 +1,12 @@
 #include <core/kernel/mem/allocator.h>
 #include <core/kernel/mem/buddy.h>
+#include <core/kernel/mem/slab.h>
+#include <core/kernel/mem/cpu_pool.h>
 #include <core/kernel/kstd.h>
 #include <log.h>
 #include <limine.h>
 #include <core/arch/panic.h>
+#include <core/arch/smp.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -80,6 +83,10 @@ void format_memory_size(size_t size, char* buffer) {
     *buf_ptr = '\0';
 }
 
+buddy_allocator_t* slab_get_buddy(void) {
+    return &buddy_allocator;
+}
+
 void memory_manager_init(void) {
     LOG_TRACE("memory_manager_init: starting initialization\n");
 
@@ -135,15 +142,52 @@ void memory_manager_init(void) {
     char buffer[64];
     format_memory_size(buddy_get_total_memory(&buddy_allocator), buffer);
     LOG_INFO("Buddy allocator initialized (%s)\n", buffer);
+    slab_init();
     LOG_TRACE("memory_manager_init: completed\n");
 }
 
 void* kmalloc(size_t size) {
-    LOG_TRACE("kmalloc: requested size=%zu\n", size);
+    if (size == 0) return NULL;
 
-    if (size == 0) {
-        LOG_TRACE("kmalloc: zero size, returning NULL\n");
-        return NULL;
+    if (size <= 1024) {
+        void* ptr = slab_alloc(size);
+        if (ptr) {
+            allocated_memory += size;
+            alloc_count++;
+            return ptr;
+        }
+    }
+
+    if (size <= 4096) {
+        uint32_t cpu_id = smp_current_cpu_id();
+        void* block = cpu_pool_alloc(cpu_id, 12);
+        if (block) {
+            alloc_info_t* info = (alloc_info_t*)block;
+            info->order     = 12;
+            info->magic     = ALLOC_MAGIC;
+            info->user_size = size;
+
+            allocated_memory += size;
+            alloc_count++;
+
+            return (void*)((uintptr_t)block + sizeof(alloc_info_t));
+        }
+    }
+
+    if (size <= 8192) {
+        uint32_t cpu_id = smp_current_cpu_id();
+        void* block = cpu_pool_alloc(cpu_id, 13);
+        if (block) {
+            alloc_info_t* info = (alloc_info_t*)block;
+            info->order     = 13;
+            info->magic     = ALLOC_MAGIC;
+            info->user_size = size;
+
+            allocated_memory += size;
+            alloc_count++;
+
+            return (void*)((uintptr_t)block + sizeof(alloc_info_t));
+        }
     }
 
     size_t total_size = size + sizeof(alloc_info_t);
@@ -155,85 +199,55 @@ void* kmalloc(size_t size) {
         block_size <<= 1;
     }
 
-    LOG_TRACE("kmalloc: calculated order=%u for total_size=%zu\n", order, total_size);
-
     void* block = buddy_alloc(&buddy_allocator, block_size);
-    if (!block) {
-        LOG_TRACE("kmalloc: buddy_alloc failed for size %zu\n", block_size);
-        return NULL;
-    }
+    if (!block) return NULL;
 
     alloc_info_t* info = (alloc_info_t*)block;
-    info->order = order;
-    info->magic = ALLOC_MAGIC;
+    info->order     = order;
+    info->magic     = ALLOC_MAGIC;
     info->user_size = size;
-
-    LOG_TRACE("kmalloc: allocated block at %p (order=%u, user_size=%zu)\n", block, order, size);
 
     allocated_memory += size;
     alloc_count++;
-    
-    alloc_total++;
-    last_alloc_ptr = (uintptr_t)block + sizeof(alloc_info_t);
-    last_alloc_size = size;
-    LOG_DEBUG("kmalloc: #%zu allocated %p (size=%zu, total_allocated=%zu)\n", 
-              alloc_total, last_alloc_ptr, size, allocated_memory);
 
     return (void*)((uintptr_t)block + sizeof(alloc_info_t));
 }
 
 void kfree(void* ptr) {
-    LOG_TRACE("kfree: freeing ptr=%p\n", ptr);
+    if (!ptr) return;
 
-    if (!ptr) {
-        LOG_TRACE("kfree: NULL pointer, ignoring\n");
+    if (slab_owns(ptr)) {
+        slab_free(ptr);
+        free_count++;
         return;
     }
 
     alloc_info_t* info = (alloc_info_t*)((uintptr_t)ptr - sizeof(alloc_info_t));
-    
-    LOG_DEBUG("kfree: info at %p, magic=0x%08x, order=%u, user_size=%zu\n",
-              info, info->magic, info->order, info->user_size);
-    
-    LOG_DEBUG("kfree: caller address: %p\n", __builtin_return_address(0));
 
     if (info->magic != ALLOC_MAGIC) {
-        LOG_ERROR("kfree: CORRUPTION DETECTED at %p\n", ptr);
-        LOG_ERROR("kfree: expected magic=0x%08x, got=0x%08x\n", ALLOC_MAGIC, info->magic);
-        LOG_ERROR("kfree: order=%u (valid range: %u-%u)\n", 
-                  info->order, BUDDY_MIN_ORDER, BUDDY_MAX_ORDER);
-        LOG_ERROR("kfree: user_size=%zu\n", info->user_size);
-        LOG_ERROR("kfree: caller: %p\n", __builtin_return_address(0));
-        
-        uint32_t* dump = (uint32_t*)((uintptr_t)info - 16);
-        LOG_ERROR("kfree: memory dump at info-16: %08x %08x %08x %08x\n",
-                 dump[0], dump[1], dump[2], dump[3]);
-        LOG_ERROR("kfree: memory dump at info:    %08x %08x %08x %08x\n",
-                 dump[4], dump[5], dump[6], dump[7]);
-        LOG_ERROR("kfree: memory dump at info+16: %08x %08x %08x %08x\n",
-                 dump[8], dump[9], dump[10], dump[11]);
-        
-        panic("Invalid free. corrupted allocation info");
+        LOG_ERROR("kfree: corruption at %p (magic=0x%08x)\n", ptr, info->magic);
+        panic("Invalid free: corrupted allocation info");
+    }
+
+    if (info->order == 12 || info->order == 13) {
+        if (allocated_memory >= info->user_size)
+            allocated_memory -= info->user_size;
+        free_count++;
+        uint32_t cpu_id = smp_current_cpu_id();
+        cpu_pool_free(cpu_id, (void*)info, info->order);
+        return;
     }
 
     if (info->order < BUDDY_MIN_ORDER || info->order > BUDDY_MAX_ORDER) {
-        LOG_ERROR("kfree: invalid order %u in allocation info (ptr=%p)\n", info->order, ptr);
-        LOG_ERROR("kfree: caller: %p\n", __builtin_return_address(0));
-        panic("Invalid free. invalid order in allocation info");
+        LOG_ERROR("kfree: invalid order %u at %p\n", info->order, ptr);
+        panic("Invalid free: invalid order");
     }
 
-    LOG_TRACE("kfree: freeing block order=%u, user_size=%zu\n", info->order, info->user_size);
-
-    if (allocated_memory >= info->user_size) {
+    if (allocated_memory >= info->user_size)
         allocated_memory -= info->user_size;
-    } else {
-        LOG_WARN("kfree: allocated_memory (%zu) < user_size (%zu), possible corruption\n",
-                allocated_memory, info->user_size);
-    }
-    free_count++;
 
+    free_count++;
     buddy_free(&buddy_allocator, (void*)info, info->order);
-    LOG_TRACE("kfree: completed freeing ptr=%p\n", ptr);
 }
 
 size_t get_memory_total(void) {

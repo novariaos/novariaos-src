@@ -30,11 +30,11 @@ targets:
 
   kernel.bin:
       deps: [prepare,
-            core/arch/boot, core/arch/spinlock, core/arch/cpuid, core/arch/entropy,
+            core/arch/boot, core/arch/spinlock, core/arch/cpuid, core/arch/entropy, core/arch/smp, core/arch/work_queue,
 
             core/kernel/kernel, core/kernel/kstd, core/kernel/shell,
 
-            core/kernel/mem/buddy,  core/kernel/mem/allocator,
+            core/kernel/mem/buddy,  core/kernel/mem/allocator, core/kernel/mem/slab, core/kernel/mem/cpu_pool,
 
             core/kernel/vge/fb, core/kernel/vge/fb_render, core/kernel/vge/psf, core/kernel/vge/palette,
 
@@ -42,6 +42,7 @@ targets:
 
             core/fs/vfs, core/fs/procfs, core/fs/iso9660, core/fs/devfs,
             core/fs/block, core/fs/block_dev_vfs, core/fs/bitmap, core/fs/inode, core/fs/dirent, core/fs/fat32,
+            core/fs/ext2,
 
             core/kernel/elf/parser, core/kernel/kmodules,
 
@@ -76,6 +77,16 @@ targets:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
   core/kernel/mem/buddy:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+    
+  core/kernel/mem/slab:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
+  core/kernel/mem/cpu_pool:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
@@ -240,10 +251,17 @@ targets:
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
+  core/fs/ext2:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
   core/arch/cpuid:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
+
 
   core/kernel/userspace:
     deps: []
@@ -300,6 +318,16 @@ targets:
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
+  core/arch/smp:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
+  core/arch/work_queue:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
   apps:
     deps: [nvma]
     cmds:
@@ -317,6 +345,11 @@ targets:
     phony: true
     cmds:
       - "${QEMU} -m 1024M -serial file:qemu.log -cdrom dist/build_${DATE}.iso -boot d -cpu core2duo"
+
+  run-hdb:
+    phony: true
+    cmds:
+      - "${QEMU} -m 1024M -serial file:qemu.log -cdrom dist/build_${DATE}.iso -boot d -cpu core2duo -hdb disk.img"
 
   build-release:
     phony: true

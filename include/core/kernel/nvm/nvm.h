@@ -12,27 +12,27 @@
 #define MAX_LOCALS 512
 
 typedef struct {
-    uint8_t* bytecode;          // Bytecode pointer
-    int32_t ip;                 // Instruction Pointer
-    int32_t stack[STACK_SIZE];  // Data stack
-    int32_t sp;                 // Stack Pointer (changed to 32-bit)
-    bool active;                // Process is active?
-    uint32_t size;              // Bytecode size
-    int32_t exit_code;          // Exit code
+    uint8_t* bytecode;                          // Bytecode pointer
+    int32_t ip;                                 // Instruction Pointer
+    int32_t stack[STACK_SIZE];                  // Data stack
+    int32_t sp;                                 // Stack Pointer (changed to 32-bit)
+    bool active;                                // Process is active?
+    uint32_t size;                              // Bytecode size
+    int32_t exit_code;                          // Exit code
 
-    int32_t locals[MAX_LOCALS]; // Legacy globals/local variables (process-scoped)
+    int32_t locals[MAX_LOCALS];                 // Legacy globals/local variables (process-scoped)
 
-    // Stack frames
-    int32_t fp;                 // Frame pointer (index into stack, -1 if no frame)
+    // Stack frames             
+    int32_t fp;                                 // Frame pointer (index into stack, -1 if no frame)
 
     // CAPS
-    uint16_t capabilities[MAX_CAPS];  // List of caps
-    uint8_t caps_count;               // Count active caps
-    uint8_t pid;                      // Process ID
+    uint16_t capabilities[MAX_CAPS];            // List of caps
+    uint8_t caps_count;                         // Count active caps
+    uint8_t pid;                                // Process ID
 
     // Message system
-    bool blocked;           // Process blocked waiting for message
-    int8_t wakeup_reason;   // Reason for wakeup
+    bool blocked;                               // Process blocked waiting for message
+    int8_t wakeup_reason;                       // Reason for wakeup
 } nvm_process_t;
 
 extern nvm_process_t processes[MAX_PROCESSES];
