@@ -6,16 +6,16 @@
 - [x] Block Device Abstraction Layer
 - [x] Endianness conversion utilities (le16/le32/le64, be16/be32/be64)
 - [x] Support kernel modules
-- [ ] Memory manager rework:
+- [x] Memory manager rework:
     - [X] Buddy
         - [X] Buddy allocation
         - [X] Buddy free
-    - [ ] Slab
-        - [ ] Slab allocation
-        - [ ] Slab free
-    - [ ] Kstd allocations (WIP: current stage — buddy only)
-        - [ ] kmalloc
-        - [ ] kfree
+    - [x] Slab
+        - [x] Slab allocation
+        - [x] Slab free
+    - [x] Kstd allocations (WIP: current stage — buddy only)
+        - [x] kmalloc
+        - [x] kfree
 - [x] EXT2 Filesystem Driver (Initial support)
     - [x] Superblock and Group Descriptor Table parsing
     - [x] Bitmap management & Resource allocation (#14)
