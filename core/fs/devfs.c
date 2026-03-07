@@ -170,8 +170,8 @@ static vfs_ssize_t dev_tty_write(vfs_file_t* file, const void* buf, size_t count
     return 0;
 }
 
-static void devfs_register_device(const char* name, vfs_dev_read_t read_fn,
-                                   vfs_dev_write_t write_fn, void* data) {
+void devfs_register_device(const char* name, vfs_dev_read_t read_fn,
+                           vfs_dev_write_t write_fn, void* data) {
     for (int i = 0; i < MAX_DEVICES; i++) {
         if (!devices[i].used) {
             strcpy(devices[i].name, name);

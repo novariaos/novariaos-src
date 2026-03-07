@@ -3,6 +3,7 @@
 #include <core/fs/block_dev_vfs.h>
 #include <core/fs/block.h>
 #include <core/fs/vfs.h>
+#include <core/fs/devfs.h>
 #include <core/kernel/mem.h>
 #include <log.h>
 #include <core/kernel/kstd.h>
@@ -112,6 +113,9 @@ void block_dev_vfs_init(void) {
                 NULL, // No ioctl for now
                 &devices[i] // Pass a pointer to the block device struct
             );
+
+            // Also register in devfs so "ls /dev" shows block devices
+            devfs_register_device(devices[i].name, bdev_read, bdev_write, &devices[i]);
 
             LOG_INFO("  Registered %s\n", dev_path);
         }
