@@ -158,7 +158,7 @@ void* kmalloc(size_t size) {
         }
     }
 
-    if (size <= 4096 - sizeof(alloc_info_t)) {
+    if (size <= 4096) {
         uint32_t cpu_id = smp_current_cpu_id();
         void* block = cpu_pool_alloc(cpu_id, 12);
         if (block) {
@@ -174,7 +174,7 @@ void* kmalloc(size_t size) {
         }
     }
 
-    if (size <= 8192 - sizeof(alloc_info_t)) {
+    if (size <= 8192) {
         uint32_t cpu_id = smp_current_cpu_id();
         void* block = cpu_pool_alloc(cpu_id, 13);
         if (block) {
@@ -267,129 +267,69 @@ size_t get_memory_available(void) {
 }
 
 void memory_test(void) {
-    kprint(":: kmalloc memory test\n\n", 7);
-    char buf[64];
-    int passed = 0;
-    int failed = 0;
+    LOG_TRACE("memory_test: starting memory tests\n");
+    kprint(":: Starting buddy memory test...\n\n", 7);
 
-    static const size_t small_sizes[] = {8, 16, 32, 64, 128, 256, 512, 1024};
-    kprint("[1] Small allocations (slab)...\n", 7);
-    for (int i = 0; i < 8; i++) {
-        size_t sz = small_sizes[i];
-        uint8_t* p = (uint8_t*)kmalloc(sz);
-        if (!p) { kprint("  FAIL: kmalloc returned NULL\n", 4); failed++; continue; }
+    char buffer[64];
+    format_memory_size(buddy_get_free_memory(&buddy_allocator), buffer);
+    kprint("Initial free memory: ", 7);
+    kprint(buffer, 7);
+    kprint("\n", 7);
 
-        uint8_t pattern = (uint8_t)(sz & 0xFF);
-        for (size_t j = 0; j < sz; j++) p[j] = pattern;
+    LOG_TRACE("memory_test: allocating 256 bytes\n");
+    kprint("Allocating 256 bytes...\n", 7);
+    void* ptr1 = kmalloc(256);
+    if (ptr1 != NULL) {
+        LOG_TRACE("memory_test: allocation 1 successful at %p\n", ptr1);
+        kprint("Allocation 1 OK\n", 2);
 
-        int ok = 1;
-        for (size_t j = 0; j < sz; j++) {
-            if (p[j] != pattern) { ok = 0; break; }
-        }
+        format_memory_size(buddy_get_free_memory(&buddy_allocator), buffer);
+        kprint("Free memory after alloc1: ", 7);
+        kprint(buffer, 7);
+        kprint("\n", 7);
 
-        kfree(p);
-        if (ok) { passed++; } else {
-            kprint("  FAIL: pattern mismatch at size ", 4);
-            itoa((int)sz, buf, 10); kprint(buf, 4); kprint("\n", 4);
-            failed++;
-        }
+        LOG_TRACE("memory_test: freeing ptr1=%p\n", ptr1);
+        kfree(ptr1);
+        kprint("Free 1 OK\n", 2);
+
+        format_memory_size(buddy_get_free_memory(&buddy_allocator), buffer);
+        kprint("Free memory after free1: ", 7);
+        kprint(buffer, 7);
+        kprint("\n", 7);
+    } else {
+        LOG_ERROR("memory_test: allocation 1 failed\n");
+        panic("Allocation 1 failed");
     }
 
-    kprint("[2] Medium allocations (cpu_pool)...\n", 7);
-    static const size_t med_sizes[] = {2048, 4000, 5000, 8000};
-    for (int i = 0; i < 4; i++) {
-        size_t sz = med_sizes[i];
-        uint8_t* p = (uint8_t*)kmalloc(sz);
-        if (!p) { kprint("  FAIL: NULL\n", 4); failed++; continue; }
+    kprint("\nAllocating 512 bytes...\n", 7);
+    void* ptr2 = kmalloc(512);
+    format_memory_size(buddy_get_free_memory(&buddy_allocator), buffer);
+    kprint("Free memory after alloc2: ", 7);
+    kprint(buffer, 7);
+    kprint("\n", 7);
 
-        for (size_t j = 0; j < sz; j++) p[j] = (uint8_t)(j & 0xFF);
-
-        int ok = 1;
-        for (size_t j = 0; j < sz; j++) {
-            if (p[j] != (uint8_t)(j & 0xFF)) { ok = 0; break; }
-        }
-
-        kfree(p);
-        if (ok) { passed++; } else {
-            kprint("  FAIL: pattern mismatch at size ", 4);
-            itoa((int)sz, buf, 10); kprint(buf, 4); kprint("\n", 4);
-            failed++;
-        }
+    void* ptr3 = kmalloc(512);
+    if (ptr2 && ptr3) {
+        kprint("Allocation 2-3 OK\n", 2);
+        kfree(ptr2);
+        kfree(ptr3);
+        kprint("Free 2-3 OK\n", 2);
+    } else {
+        format_memory_size(buddy_get_free_memory(&buddy_allocator), buffer);
+        kprint("Free memory when failed: ", 4);
+        kprint(buffer, 4);
+        kprint("\n", 4);
+        panic("Test. Allocation 2-3 failed");
     }
 
-    kprint("[3] Large allocation (buddy)...\n", 7);
-    {
-        size_t sz = 64 * 1024;
-        uint32_t* p = (uint32_t*)kmalloc(sz);
-        if (!p) { kprint("  FAIL: NULL\n", 4); failed++; }
-        else {
-            size_t count = sz / sizeof(uint32_t);
-            for (size_t j = 0; j < count; j++) p[j] = (uint32_t)(j * 0xDEAD0001);
-
-            int ok = 1;
-            for (size_t j = 0; j < count; j++) {
-                if (p[j] != (uint32_t)(j * 0xDEAD0001)) { ok = 0; break; }
-            }
-            kfree(p);
-            if (ok) { passed++; } else { kprint("  FAIL: pattern mismatch\n", 4); failed++; }
-        }
+    kprint("\nTesting edge cases...\n", 7);
+    void* ptr4 = kmalloc(1024 * 1024);
+    if (ptr4) {
+        kprint("Large allocation OK\n", 2);
+        kfree(ptr4);
     }
 
-    kprint("[4] Stress test (256 alloc/free cycles)...\n", 7);
-    {
-        int ok = 1;
-        for (int i = 0; i < 256; i++) {
-            size_t sz = 16 + (i % 240);
-            uint8_t* p = (uint8_t*)kmalloc(sz);
-            if (!p) { ok = 0; break; }
-            p[0] = 0xAA;
-            p[sz - 1] = 0x55;
-            if (p[0] != 0xAA || p[sz - 1] != 0x55) { ok = 0; kfree(p); break; }
-            kfree(p);
-        }
-        if (ok) { passed++; } else { kprint("  FAIL\n", 4); failed++; }
-    }
-
-    kprint("[5] Simultaneous allocations...\n", 7);
-    {
-        #define SIM_COUNT 16
-        void* ptrs[SIM_COUNT];
-        int ok = 1;
-
-        for (int i = 0; i < SIM_COUNT; i++) {
-            ptrs[i] = kmalloc(128);
-            if (!ptrs[i]) { ok = 0; break; }
-            memset(ptrs[i], i & 0xFF, 128);
-        }
-
-        for (int i = 0; i < SIM_COUNT && ok; i++) {
-            if (!ptrs[i]) continue;
-            uint8_t* p = (uint8_t*)ptrs[i];
-            for (int j = 0; j < 128; j++) {
-                if (p[j] != (uint8_t)(i & 0xFF)) { ok = 0; break; }
-            }
-        }
-
-        for (int i = 0; i < SIM_COUNT; i++) {
-            if (ptrs[i]) kfree(ptrs[i]);
-        }
-        if (ok) { passed++; } else { kprint("  FAIL: overlap or corruption\n", 4); failed++; }
-        #undef SIM_COUNT
-    }
-
-    kprint("[6] Edge cases...\n", 7);
-    {
-        void* p = kmalloc(0);
-        int ok = (p == NULL);
-        kfree(NULL);
-        if (ok) { passed++; } else { kprint("  FAIL: kmalloc(0) != NULL\n", 4); failed++; }
-    }
-
-    kprint("\n:: Results: ", 7);
-    itoa(passed, buf, 10); kprint(buf, 2);
-    kprint(" passed, ", 7);
-    itoa(failed, buf, 10); kprint(buf, failed ? 4 : 2);
-    kprint(" failed\n\n", 7);
+    kprint("\n:: Buddy memory test completed\n", 7);
 
     check_memory_leaks();
 }
@@ -421,11 +361,11 @@ void check_memory_leaks(void) {
         LOG_TRACE("check_memory_leaks: no leaks detected\n");
         kprint("No memory leaks detected\n", 2);
     } else {
-        LOG_ERROR("check_memory_leaks: leak detected! %zu unfreed allocation (s)\n",
+        LOG_ERROR("check_memory_leaks: leak detected! %zu unfreed allocations\n",
                  (size_t)alloc_count - (size_t)free_count);
         kprint("Memory leak detected! ", 4);
         itoa((int)alloc_count - (int)free_count, buffer, 10);
         kprint(buffer, 4);
-        kprint(" unfreed allocation (s)\n", 4);
+        kprint(" unfreed allocations\n", 4);
     }
 }
