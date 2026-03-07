@@ -14,6 +14,7 @@
 #include <core/arch/work_queue.h>
 #include <core/arch/smp.h>
 #include <core/kernel/mem/slab.h>
+#include <core/fs/block.h>
 
 #define MAX_COMMAND_LENGTH 256
 #define MAX_PATH_LENGTH 256
@@ -28,6 +29,8 @@ static void cmd_help(void) {
     kprint("  cat                - Display file contents\n", 7);
     kprint("  cd                 - Change directory\n", 7);
     kprint("  echo [text] [> file] - Print text or write to file\n", 7);
+    kprint("  mkdir <path>       - Create directory\n", 7);
+    kprint("  rm <path>          - Remove file (rm -rf for dirs)\n", 7);
     kprint("  mount <fs> <dev> <mntpoint> - Mount filesystem\n", 7);
     kprint("  umount <mntpoint>  - Unmount filesystem\n", 7);
     kprint("\n", 7);
@@ -291,12 +294,24 @@ static void cmd_echo(int argc, char* argv[]) {
 
     const char* rel = NULL;
     vfs_mount_t* mnt = vfs_find_mount(full_path, &rel);
-    if (mnt && mnt->fs && mnt->fs->ops && mnt->fs->ops->open &&
-        mnt->fs->ops->write && mnt->fs->ops->close) {
+    if (mnt && mnt->fs && mnt->fs->ops) {
+        const char* fsname = mnt->fs->name;
         const vfs_fs_ops_t* ops = mnt->fs->ops;
+
+        if (!ops->open || !ops->write || !ops->close) {
+            kprint("echo: filesystem '", 7);
+            kprint(fsname, 15);
+            kprint("' does not support write\n", 7);
+            return;
+        }
+
         char rel_path[MAX_PATH_LENGTH];
         rel_path[0] = '/';
         strcpy_safe(rel_path + 1, rel, MAX_PATH_LENGTH - 1);
+
+        kprint("echo: using ", 7);
+        kprint(fsname, 10);
+        kprint(" driver\n", 7);
 
         int flags = VFS_WRITE | VFS_CREAT | (append ? VFS_APPEND : VFS_TRUNC);
         vfs_file_handle_t h;
@@ -308,11 +323,7 @@ static void cmd_echo(int argc, char* argv[]) {
             kprint("echo: open failed (", 7);
             char eb[12]; itoa(-rc, eb, 10);
             kprint(eb, 12);
-            kprint(") fs=", 7);
-            kprint(mnt->fs->name, 15);
-            kprint(" path=", 7);
-            kprint(rel_path, 15);
-            kprint("\n", 7);
+            kprint(")\n", 7);
             return;
         }
         ops->write(mnt, &h, text, tlen);
@@ -320,10 +331,191 @@ static void cmd_echo(int argc, char* argv[]) {
     } else {
         if (!mnt)
             kprint("echo: no mount found for path\n", 7);
-        else if (!mnt->fs->ops->open)
-            kprint("echo: filesystem has no write support\n", 7);
         else
             kprint("echo: no writable filesystem at path\n", 7);
+    }
+}
+
+static void resolve_full_path(const char* path, char* full_path) {
+    if (path[0] == '/') {
+        strcpy(full_path, path);
+    } else {
+        strcpy(full_path, current_working_directory);
+        if (full_path[strlen(full_path)-1] != '/')
+            strcat(full_path, "/");
+        strcat(full_path, path);
+    }
+}
+
+// Detect filesystem type on a block device by reading magic signatures.
+// Returns: "fat32", "ext2", "iso9660", or NULL if unknown.
+static const char* detect_fs_type(block_device_t* dev) {
+    uint8_t buf[4096];
+
+    if (dev->ops.read_blocks(dev, 0, 1, buf) == 0) {
+        if (buf[510] == 0x55 && buf[511] == 0xAA) {
+            if (buf[82] == 'F' && buf[83] == 'A' && buf[84] == 'T' &&
+                buf[85] == '3' && buf[86] == '2') {
+                return "fat32";
+            }
+        }
+    }
+
+    if (dev->ops.read_blocks(dev, 2, 2, buf) == 0) {
+        uint16_t magic = (uint16_t)buf[56] | ((uint16_t)buf[57] << 8);
+        if (magic == 0xEF53) {
+            return "ext2";
+        }
+    }
+
+    if (dev->ops.read_blocks(dev, 64, 4, buf) == 0) {
+        if (buf[1] == 'C' && buf[2] == 'D' && buf[3] == '0' &&
+            buf[4] == '0' && buf[5] == '1') {
+            return "iso9660";
+        }
+    }
+
+    return NULL;
+}
+
+static void cmd_mkdir(int argc, char* argv[]) {
+    if (argc < 2) {
+        kprint("Usage: mkdir <path>\n", 7);
+        return;
+    }
+
+    char full_path[MAX_PATH_LENGTH];
+    resolve_full_path(argv[1], full_path);
+
+    const char* rel = NULL;
+    vfs_mount_t* mnt = vfs_find_mount(full_path, &rel);
+    if (mnt && mnt->fs && mnt->fs->ops) {
+        const char* fsname = mnt->fs->name;
+
+        if (!mnt->fs->ops->mkdir) {
+            kprint("mkdir: filesystem '", 7);
+            kprint(fsname, 15);
+            kprint("' does not support mkdir\n", 7);
+            return;
+        }
+
+        char rel_path[MAX_PATH_LENGTH];
+        rel_path[0] = '/';
+        strcpy_safe(rel_path + 1, rel, MAX_PATH_LENGTH - 1);
+
+        kprint("mkdir: using ", 7);
+        kprint(fsname, 10);
+        kprint(" driver\n", 7);
+
+        int rc = mnt->fs->ops->mkdir(mnt, rel_path, 0755);
+        if (rc != 0) {
+            kprint("mkdir: failed (", 7);
+            char eb[12]; itoa(-rc, eb, 10);
+            kprint(eb, 12);
+            kprint(")\n", 7);
+        }
+        return;
+    }
+
+    // Fallback: legacy in-memory VFS
+    int rc = vfs_mkdir(full_path);
+    if (rc < 0) {
+        kprint("mkdir: failed to create directory\n", 7);
+    }
+}
+
+static void cmd_rm(int argc, char* argv[]) {
+    if (argc < 2) {
+        kprint("Usage: rm <path> or rm -rf <path>\n", 7);
+        return;
+    }
+
+    int recursive = 0;
+    const char* target = NULL;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-rf") == 0 || strcmp(argv[i], "-r") == 0 ||
+            strcmp(argv[i], "-fr") == 0 || strcmp(argv[i], "-f") == 0) {
+            recursive = 1;
+        } else {
+            target = argv[i];
+        }
+    }
+
+    if (!target) {
+        kprint("rm: missing operand\n", 7);
+        return;
+    }
+
+    char full_path[MAX_PATH_LENGTH];
+    resolve_full_path(target, full_path);
+
+    const char* rel = NULL;
+    vfs_mount_t* mnt = vfs_find_mount(full_path, &rel);
+    if (mnt && mnt->fs && mnt->fs->ops) {
+        const char* fsname = mnt->fs->name;
+        char rel_path[MAX_PATH_LENGTH];
+        rel_path[0] = '/';
+        strcpy_safe(rel_path + 1, rel, MAX_PATH_LENGTH - 1);
+
+        if (recursive) {
+            if (!mnt->fs->ops->rmdir) {
+                kprint("rm: filesystem '", 7);
+                kprint(fsname, 15);
+                kprint("' does not support rmdir\n", 7);
+                return;
+            }
+
+            kprint("rm: using ", 7);
+            kprint(fsname, 10);
+            kprint(" rmdir\n", 7);
+
+            int rc = mnt->fs->ops->rmdir(mnt, rel_path);
+            if (rc != 0) {
+                kprint("rm: failed (", 7);
+                char eb[12]; itoa(-rc, eb, 10);
+                kprint(eb, 12);
+                kprint(")\n", 7);
+            }
+        } else {
+            if (!mnt->fs->ops->unlink) {
+                kprint("rm: filesystem '", 7);
+                kprint(fsname, 15);
+                kprint("' does not support unlink\n", 7);
+                return;
+            }
+
+            kprint("rm: using ", 7);
+            kprint(fsname, 10);
+            kprint(" unlink\n", 7);
+
+            int rc = mnt->fs->ops->unlink(mnt, rel_path);
+            if (rc != 0) {
+                kprint("rm: failed (", 7);
+                char eb[12]; itoa(-rc, eb, 10);
+                kprint(eb, 12);
+                kprint(")\n", 7);
+            }
+        }
+        return;
+    }
+
+    // Fallback: legacy in-memory VFS
+    if (recursive) {
+        int rc = vfs_rmdir(full_path);
+        if (rc != 0) {
+            kprint("rm: failed (", 7);
+            char eb[12]; itoa(-rc, eb, 10);
+            kprint(eb, 12);
+            kprint(")\n", 7);
+        }
+    } else {
+        int rc = vfs_delete(full_path);
+        if (rc != 0) {
+            kprint("rm: ", 7);
+            kprint(full_path, 7);
+            kprint(": No such file\n", 7);
+        }
     }
 }
 
@@ -404,6 +596,8 @@ static void execute_command(const char* command) {
     } else if (strcmp(argv[0], "#") == 0 ) {}
     else if (strcmp(argv[0], "memleak") == 0) {
         check_memory_leaks();
+    } else if (strcmp(argv[0], "memtest") == 0) {
+        memory_test();
     } else if (strcmp(argv[0], "clear") == 0) {
         clear_screen();
     } else if (strcmp(argv[0], "pwd") == 0) {
@@ -425,6 +619,10 @@ static void execute_command(const char* command) {
         shell_set_cwd(argv[1]);
     } else if (strcmp(argv[0], "echo") == 0) {
         cmd_echo(argc, argv);
+    } else if (strcmp(argv[0], "mkdir") == 0) {
+        cmd_mkdir(argc, argv);
+    } else if (strcmp(argv[0], "rm") == 0) {
+        cmd_rm(argc, argv);
     } else if (strcmp(argv[0], "mount") == 0) {
         cmd_mount(argc, argv);
     } else if (strcmp(argv[0], "umount") == 0) {

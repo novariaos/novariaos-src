@@ -22,7 +22,7 @@ int register_block_device(const char* name, uint32_t block_size, uint64_t total_
             block_devices[i].ops = *ops;
             block_devices[i].private_data = private_data;
             block_devices[i].used = true;
-            LOG_INFO("Registered block device '%s'.", name);
+            LOG_INFO("Registered block device '%s'. \n", name);
             return 0;
         }
     }

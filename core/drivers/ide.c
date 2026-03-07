@@ -180,8 +180,13 @@ static int ide_write_blocks(struct block_device* dev, uint64_t lba, size_t count
                 outw(base + ATA_REG_DATA, src[w]);
 
             src += 256;
+
+            // Wait for drive to finish writing this sector
+            if (ide_wait_ready(base) < 0)
+                return -EIO;
         }
 
+        // FLUSH CACHE — ensure data hits the platter
         outb(base + ATA_REG_CMD, 0xE7);
         if (ide_wait_ready(base) < 0)
             return -EIO;

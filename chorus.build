@@ -349,7 +349,13 @@ targets:
   run-hdb:
     phony: true
     cmds:
-      - "${QEMU} -m 1024M -serial file:qemu.log -cdrom dist/build_${DATE}.iso -boot d -cpu core2duo -hdb disk.img"
+      - "${QEMU} -m 1024M -serial file:qemu.log -cdrom dist/build_${DATE}.iso -boot d -cpu core2duo -drive file=disk.img,format=raw,if=ide,index=1,cache=none"
+    
+  make-hdb:
+    phony: true
+    cmds:
+        - "dd if=/dev/zero of=disk.img bs=1M count=64"
+        - "mkfs.ext2 disk.img"
 
   build-release:
     phony: true
