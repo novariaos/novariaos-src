@@ -214,18 +214,26 @@ static int ext2_set_indirect(ext2_fs_t *fs, uint32_t *ind_block_ptr,
     uint32_t *table = kmalloc(fs->block_size);
     if (!table) return -ENOMEM;
 
-    if (*ind_block_ptr == 0) {
-        *ind_block_ptr = ext2_alloc_block(fs);
-        if (*ind_block_ptr == 0) { kfree(table); return -ENOSPC; }
+    uint32_t ind_block = *ind_block_ptr;
+    
+    if (ind_block == 0) {
+        ind_block = ext2_alloc_block(fs);
+        if (ind_block == 0) { kfree(table); return -ENOSPC; }
         memset(table, 0, fs->block_size);
     } else {
-        if (ext2_read_block(fs, *ind_block_ptr, table) != 0) {
+        if (ext2_read_block(fs, ind_block, table) != 0) {
             kfree(table);
             return -EIO;
         }
     }
+    
     table[index] = phys_block;
-    int rc = ext2_write_block(fs, *ind_block_ptr, table);
+    int rc = ext2_write_block(fs, ind_block, table);
+    
+    if (rc == 0) {
+        *ind_block_ptr = ind_block; 
+    }
+    
     kfree(table);
     return rc;
 }
@@ -241,26 +249,43 @@ static int ext2_bmap_set(ext2_fs_t *fs, ext2_inode_t *inode,
     lbn -= EXT2_NDIR_BLOCKS;
 
     if (lbn < ppb) {
-        return ext2_set_indirect(fs, &inode->i_block[EXT2_IND_BLOCK], lbn, phys);
+        uint32_t ind_block = inode->i_block[EXT2_IND_BLOCK];
+        int rc = ext2_set_indirect(fs, &ind_block, lbn, phys);
+        if (rc == 0 && ind_block != inode->i_block[EXT2_IND_BLOCK]) {
+            inode->i_block[EXT2_IND_BLOCK] = ind_block;
+        }
+        return rc;
     }
     lbn -= ppb;
 
     if (lbn < ppb * ppb) {
         uint32_t *l1_table = kmalloc(fs->block_size);
         if (!l1_table) return -ENOMEM;
-        uint32_t *dind = &inode->i_block[EXT2_DIND_BLOCK];
-        if (*dind == 0) {
-            *dind = ext2_alloc_block(fs);
-            if (*dind == 0) { kfree(l1_table); return -ENOSPC; }
+        
+        uint32_t dind_block = inode->i_block[EXT2_DIND_BLOCK];
+        uint32_t *dind_ptr = &dind_block; 
+        
+        if (dind_block == 0) {
+            dind_block = ext2_alloc_block(fs);
+            if (dind_block == 0) { kfree(l1_table); return -ENOSPC; }
             memset(l1_table, 0, fs->block_size);
         } else {
-            if (ext2_read_block(fs, *dind, l1_table) != 0) {
+            if (ext2_read_block(fs, dind_block, l1_table) != 0) {
                 kfree(l1_table); return -EIO;
             }
         }
+        
         uint32_t l1_idx = lbn / ppb;
         int rc = ext2_set_indirect(fs, &l1_table[l1_idx], lbn % ppb, phys);
-        if (rc == 0) rc = ext2_write_block(fs, *dind, l1_table);
+        
+        if (rc == 0) {
+            rc = ext2_write_block(fs, dind_block, l1_table);
+        }
+        
+        if (rc == 0 && dind_block != inode->i_block[EXT2_DIND_BLOCK]) {
+            inode->i_block[EXT2_DIND_BLOCK] = dind_block;
+        }
+        
         kfree(l1_table);
         return rc;
     }
@@ -268,30 +293,52 @@ static int ext2_bmap_set(ext2_fs_t *fs, ext2_inode_t *inode,
     lbn -= ppb * ppb;
     uint32_t *l1_table = kmalloc(fs->block_size);
     if (!l1_table) return -ENOMEM;
-    uint32_t *tind = &inode->i_block[EXT2_TIND_BLOCK];
-    if (*tind == 0) {
-        *tind = ext2_alloc_block(fs);
-        if (*tind == 0) { kfree(l1_table); return -ENOSPC; }
+    
+    uint32_t tind_block = inode->i_block[EXT2_TIND_BLOCK];
+    
+    if (tind_block == 0) {
+        tind_block = ext2_alloc_block(fs);
+        if (tind_block == 0) { kfree(l1_table); return -ENOSPC; }
         memset(l1_table, 0, fs->block_size);
     } else {
-        if (ext2_read_block(fs, *tind, l1_table) != 0) { kfree(l1_table); return -EIO; }
+        if (ext2_read_block(fs, tind_block, l1_table) != 0) { 
+            kfree(l1_table); return -EIO; 
+        }
     }
+    
     uint32_t l1_idx = lbn / (ppb * ppb);
     uint32_t *l2_table = kmalloc(fs->block_size);
     if (!l2_table) { kfree(l1_table); return -ENOMEM; }
-    if (l1_table[l1_idx] == 0) {
-        l1_table[l1_idx] = ext2_alloc_block(fs);
-        if (l1_table[l1_idx] == 0) { kfree(l1_table); kfree(l2_table); return -ENOSPC; }
+    
+    uint32_t l1_entry = l1_table[l1_idx];
+    if (l1_entry == 0) {
+        l1_entry = ext2_alloc_block(fs);
+        if (l1_entry == 0) { 
+            kfree(l1_table); kfree(l2_table); return -ENOSPC; 
+        }
         memset(l2_table, 0, fs->block_size);
     } else {
-        if (ext2_read_block(fs, l1_table[l1_idx], l2_table) != 0) {
+        if (ext2_read_block(fs, l1_entry, l2_table) != 0) {
             kfree(l1_table); kfree(l2_table); return -EIO;
         }
     }
+    
     uint32_t l2_idx = (lbn / ppb) % ppb;
     int rc = ext2_set_indirect(fs, &l2_table[l2_idx], lbn % ppb, phys);
-    if (rc == 0) rc = ext2_write_block(fs, l1_table[l1_idx], l2_table);
-    if (rc == 0) rc = ext2_write_block(fs, *tind, l1_table);
+    
+    if (rc == 0) {
+        rc = ext2_write_block(fs, l1_entry, l2_table);
+    }
+    
+    if (rc == 0) {
+        l1_table[l1_idx] = l1_entry;
+        rc = ext2_write_block(fs, tind_block, l1_table);
+    }
+    
+    if (rc == 0 && tind_block != inode->i_block[EXT2_TIND_BLOCK]) {
+        inode->i_block[EXT2_TIND_BLOCK] = tind_block;
+    }
+    
     kfree(l1_table);
     kfree(l2_table);
     return rc;

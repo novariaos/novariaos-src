@@ -425,7 +425,8 @@ void procfs_init(void) {
     procfs_add_entry("meminfo", procfs_meminfo, NULL, false);
     procfs_add_entry("pci", procfs_pci, NULL, false);
     procfs_add_entry("uptime", procfs_uptime, NULL, false);
-
+    procfs_add_entry("version", procfs_version, NULL, false);
+    
     // Register via legacy mechanism (for actual I/O)
     vfs_pseudo_register("/proc/cpuinfo", procfs_cpuinfo, NULL, NULL, NULL, NULL);
     vfs_pseudo_register("/proc/meminfo", procfs_meminfo, NULL, NULL, NULL, NULL);
