@@ -13,6 +13,7 @@
 #include <core/drivers/ramdisk.h>
 #include <core/drivers/ide.h>
 #include <core/drivers/nvme.h>
+#include <core/drivers/ahci.h>
 #include <core/kernel/shell.h>
 #include <log.h>
 #include <core/fs/iso9660.h>
@@ -93,6 +94,7 @@ static void fs_init(void) {
 
     ide_init();
     nvme_init();
+    ahci_init();
     fat32_init();
     ext2_init();
 

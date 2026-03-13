@@ -369,3 +369,7 @@ void check_memory_leaks(void) {
         kprint(" unfreed allocations\n", 4);
     }
 }
+
+uint64_t get_hhdm_offset(void) {
+    return hhdm_offset;
+}
