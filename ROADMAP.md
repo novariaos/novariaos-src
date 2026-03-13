@@ -48,6 +48,23 @@
     - [ ] Multiple namespace support
     - [ ] PCI enumeration for NVMe devices
 
+- [ ] AHCI (SATA) Driver
+    - [x] PCI bus scan for AHCI controller (class 01h/06h)
+    - [x] ABAR (BAR5) discovery and MMIO mapping
+    - [x] GHC AHCI enable and controller version detection
+    - [x] Port enumeration and device type detection
+    - [x] Command list and FIS receive buffer allocation (port rebase)
+    - [x] IDENTIFY DEVICE command (LBA48 and LBA28 sector count)
+    - [x] DMA read operations (READ DMA EXT, LBA48)
+    - [x] DMA write operations (WRITE DMA EXT, LBA48)
+    - [x] Block device registration (sda, sdb, ...)
+    - [ ] Interrupt-based I/O (currently uses polling)
+    - [ ] Hot-plug support (port change detection)
+    - [ ] ATAPI device support
+    - [ ] NCQ (Native Command Queuing)
+    - [ ] Port multiplier support
+    - [ ] Error recovery and port reset
+
 ## Medium Priority
 - [ ] /dev/tty (WIP: current stage — write only)
 - [ ] Poor /sys/pci (vendor/device without interrupts)

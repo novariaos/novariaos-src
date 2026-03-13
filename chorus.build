@@ -38,7 +38,7 @@ targets:
 
             core/kernel/vge/fb, core/kernel/vge/fb_render, core/kernel/vge/psf, core/kernel/vge/palette,
 
-            core/drivers/serial, core/drivers/timer, core/drivers/keyboard, core/drivers/cdrom, core/drivers/ramdisk, core/drivers/ide, core/drivers/nvme,
+            core/drivers/serial, core/drivers/timer, core/drivers/keyboard, core/drivers/cdrom, core/drivers/ramdisk, core/drivers/ide, core/drivers/nvme, core/drivers/ahci,
 
             core/fs/vfs, core/fs/procfs, core/fs/iso9660, core/fs/devfs,
             core/fs/block, core/fs/block_dev_vfs, core/fs/bitmap, core/fs/inode, core/fs/dirent, core/fs/fat32,
@@ -201,6 +201,11 @@ targets:
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
+  core/drivers/ahci:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
   core/kernel/shell:
     deps: []
     cmds:
@@ -352,9 +357,9 @@ targets:
       - "${QEMU} -m 1024M -serial file:qemu.log -cdrom dist/build_${DATE}.iso -boot d -cpu core2duo"
 
   run-hdb:
-    phony: true
-    cmds:
-      - "${QEMU} -m 1024M -serial file:qemu.log -cdrom dist/build_${DATE}.iso -boot d -cpu core2duo -hdb disk.img"
+      phony: true
+      cmds:
+        - "${QEMU} -m 1024M -serial file:qemu.log -cdrom dist/build_${DATE}.iso -boot d -cpu core2duo -device ahci,id=ahci -drive file=disk.img,if=none,id=disk1,format=raw -device ide-hd,drive=disk1,bus=ahci.0"
 
   build-release:
     phony: true

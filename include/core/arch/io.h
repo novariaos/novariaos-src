@@ -23,4 +23,14 @@ static inline void outw(uint16_t port, uint16_t val) {
     __asm__("outw %w0, %w1" : : "a"(val), "Nd"(port) : "memory");
 }
 
+static inline uint32_t inl(uint16_t port) {
+    uint32_t res;
+    __asm__("inl %w1, %0" : "=a"(res) : "Nd"(port) : "memory");
+    return res;
+}
+
+static inline void outl(uint16_t port, uint32_t val) {
+    __asm__("outl %0, %w1" : : "a"(val), "Nd"(port) : "memory");
+}
+
 #endif
