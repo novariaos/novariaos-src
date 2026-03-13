@@ -354,12 +354,17 @@ targets:
   run:
     phony: true
     cmds:
-      - "${QEMU} -m 1024M -serial file:qemu.log -cdrom dist/build_${DATE}.iso -boot d -cpu core2duo"
+      - "${QEMU} -m 1024M -serial file:qemu.log -cdrom dist/build_${DATE}.iso -boot d -smp 4,cores=4,threads=1,sockets=1"
+
+  run-kvm:
+    phony: true
+    cmds:
+      - "${QEMU} -m 1024M -serial file:qemu.log -cdrom dist/build_${DATE}.iso -boot d -smp 4,cores=4,threads=1,sockets=1 -enable-kvm"
 
   run-hdb:
       phony: true
       cmds:
-        - "${QEMU} -m 1024M -serial file:qemu.log -cdrom dist/build_${DATE}.iso -boot d -cpu core2duo -device ahci,id=ahci -drive file=disk.img,if=none,id=disk1,format=raw -device ide-hd,drive=disk1,bus=ahci.0"
+        - "${QEMU} -m 1024M -serial file:qemu.log -cdrom dist/build_${DATE}.iso -boot d -smp 4,cores=4,threads=1,sockets=1 -device ahci,id=ahci -drive file=disk.img,if=none,id=disk1,format=raw -device ide-hd,drive=disk1,bus=ahci.0"
 
   build-release:
     phony: true
