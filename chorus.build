@@ -38,7 +38,8 @@ targets:
 
             core/kernel/vge/fb, core/kernel/vge/fb_render, core/kernel/vge/psf, core/kernel/vge/palette,
 
-            core/drivers/serial, core/drivers/timer, core/drivers/keyboard, core/drivers/cdrom, core/drivers/ramdisk, core/drivers/ide, core/drivers/nvme, core/drivers/pci,
+            core/drivers/serial, core/drivers/timer, core/drivers/keyboard, core/drivers/cdrom, core/drivers/ramdisk, core/drivers/ide, core/drivers/ahci,
+             core/drivers/nvme, core/drivers/pci,
 
             core/fs/vfs, core/fs/procfs, core/fs/iso9660, core/fs/devfs,
             core/fs/block, core/fs/block_dev_vfs, core/fs/bitmap, core/fs/inode, core/fs/dirent, core/fs/fat32,

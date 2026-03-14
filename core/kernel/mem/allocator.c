@@ -419,7 +419,3 @@ void check_memory_leaks(void) {
 
     kprint("+-----------------------------+\n", 7);
 }
-
-uint64_t get_hhdm_offset(void) {
-    return hhdm_offset;
-}

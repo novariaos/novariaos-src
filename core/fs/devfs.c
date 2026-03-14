@@ -3,6 +3,7 @@
 #include <core/crypto/chacha20_rng.h>
 #include <core/arch/entropy.h>
 #include <core/kernel/kstd.h>
+#include <core/kernel/mem.h>
 #include <core/fs/vfs.h>
 #include <stdbool.h>
 #include <string.h>
