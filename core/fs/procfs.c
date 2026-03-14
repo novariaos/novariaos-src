@@ -545,20 +545,20 @@ vfs_ssize_t procfs_meminfo(vfs_file_t* file, void* buf, size_t count, vfs_off_t*
     char meminfo_buf[512];
 
     // Always recalculate memory info
-    size_t memTotal = getMemTotal();
-    size_t buddyFree = getMemFree();  // free blocks in buddy allocator
-    size_t allocated = getMemUsed();  // memory allocated via kmalloc
+    size_t memTotal = get_memory_total();
+    size_t buddyFree = get_memory_free();  // free blocks in buddy allocator
+    size_t allocated = get_memory_used();  // memory allocated via kmalloc
     size_t memUsed = allocated;
     size_t memFree = memTotal - allocated;  // available memory for allocation
 
     size_t overhead = 0; // Buddy allocator doesn't have per-block overhead like linked list
 
     char total_str[32], used_str[32], free_str[32], ovh_str[32], buddy_free_str[32];
-    formatMemorySize(memTotal, total_str);
-    formatMemorySize(memUsed, used_str);
-    formatMemorySize(memFree, free_str);
-    formatMemorySize(overhead, ovh_str);
-    formatMemorySize(buddyFree, buddy_free_str);
+    format_memory_size(memTotal, total_str);
+    format_memory_size(memUsed, used_str);
+    format_memory_size(memFree, free_str);
+    format_memory_size(overhead, ovh_str);
+    format_memory_size(buddyFree, buddy_free_str);
 
     strcpy_safe(meminfo_buf, "MemTotal       : ", sizeof(meminfo_buf));
     strcat_safe(meminfo_buf, total_str, sizeof(meminfo_buf));

@@ -17,5 +17,6 @@ size_t get_memory_available(void);
 void format_memory_size(size_t size, char* buffer);
 void memory_test(void);
 void check_memory_leaks(void);
+uint64_t get_hhdm_offset(void);
 
 #endif

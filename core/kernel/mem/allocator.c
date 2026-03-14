@@ -272,104 +272,154 @@ size_t get_memory_available(void) {
 
 void memory_test(void) {
     LOG_TRACE("memory_test: starting memory tests\n");
-    kprint(":: Starting buddy memory test...\n\n", 7);
-
+    
     char buffer[64];
-    format_memory_size(buddy_get_free_memory(&buddy_allocator), buffer);
-    kprint("Initial free memory: ", 7);
-    kprint(buffer, 7);
+    size_t initial_free, current_free;
+    
+    // Get initial memory state
+    initial_free = buddy_get_free_memory(&buddy_allocator);
+    format_memory_size(initial_free, buffer);
+    
     kprint("\n", 7);
-
+    kprint("========================================\n", 7);
+    kprint("        MEMORY ALLOCATOR TESTS          \n", 7);
+    kprint("========================================\n\n", 7);
+    
+    kprint("Free: ", 7);
+    kprint(buffer, 7);
+    kprint("\n\n", 7);
+    
+    // Test 1: Basic alloc/free
+    kprint("--- Test 1: Basic ---\n", 7);
     LOG_TRACE("memory_test: allocating 256 bytes\n");
-    kprint("Allocating 256 bytes...\n", 7);
+    
     void* ptr1 = kmalloc(256);
-    if (ptr1 != NULL) {
-        LOG_TRACE("memory_test: allocation 1 successful at %p\n", ptr1);
-        kprint("Allocation 1 OK\n", 2);
-
-        format_memory_size(buddy_get_free_memory(&buddy_allocator), buffer);
-        kprint("Free memory after alloc1: ", 7);
+    if (ptr1) {
+        LOG_TRACE("memory_test: allocated %p\n", ptr1);
+        kprint("  malloc(256)    [OK]\n", 2);
+        
+        current_free = buddy_get_free_memory(&buddy_allocator);
+        format_memory_size(current_free, buffer);
+        kprint("  Free: ", 7);
         kprint(buffer, 7);
         kprint("\n", 7);
-
-        LOG_TRACE("memory_test: freeing ptr1=%p\n", ptr1);
+        
+        LOG_TRACE("memory_test: freeing %p\n", ptr1);
         kfree(ptr1);
-        kprint("Free 1 OK\n", 2);
-
-        format_memory_size(buddy_get_free_memory(&buddy_allocator), buffer);
-        kprint("Free memory after free1: ", 7);
-        kprint(buffer, 7);
-        kprint("\n", 7);
+        kprint("  free()         [OK]\n\n", 2);
     } else {
-        LOG_ERROR("memory_test: allocation 1 failed\n");
-        panic("Allocation 1 failed");
+        LOG_ERROR("memory_test: allocation failed\n");
+        kprint("  malloc(256)    [FAIL]\n", 4);
+        panic("Test 1 failed");
     }
-
-    kprint("\nAllocating 512 bytes...\n", 7);
+    
+    // Test 2: Multiple allocations
+    kprint("--- Test 2: Multiple ---\n", 7);
+    
     void* ptr2 = kmalloc(512);
-    format_memory_size(buddy_get_free_memory(&buddy_allocator), buffer);
-    kprint("Free memory after alloc2: ", 7);
-    kprint(buffer, 7);
-    kprint("\n", 7);
-
     void* ptr3 = kmalloc(512);
+    
     if (ptr2 && ptr3) {
-        kprint("Allocation 2-3 OK\n", 2);
+        kprint("  malloc(512)x2  [OK]\n", 2);
+        
         kfree(ptr2);
         kfree(ptr3);
-        kprint("Free 2-3 OK\n", 2);
+        kprint("  free()x2       [OK]\n\n", 2);
     } else {
-        format_memory_size(buddy_get_free_memory(&buddy_allocator), buffer);
-        kprint("Free memory when failed: ", 4);
-        kprint(buffer, 4);
-        kprint("\n", 4);
-        panic("Test. Allocation 2-3 failed");
+        kprint("  multiple alloc [FAIL]\n", 4);
+        panic("Test 2 failed");
     }
-
-    kprint("\nTesting edge cases...\n", 7);
+    
+    // Test 3: Edge cases 
+    kprint("--- Test 3: Edge cases ---\n", 7);
+    
+    // Large allocation 
     void* ptr4 = kmalloc(1024 * 1024);
     if (ptr4) {
-        kprint("Large allocation OK\n", 2);
+        kprint("  large (1MB)    [OK]\n", 2);
         kfree(ptr4);
+        kprint("  free()         [OK]\n", 2);
+    } else {
+        kprint("  large (1MB)    [--] (no memory)\n", 6);
     }
-
-    kprint("\n:: Buddy memory test completed\n", 7);
-
+    
+    // Zero-siz
+    void* ptr5 = kmalloc(0);
+    if (ptr5 == NULL) {
+        kprint("  zero-size      [OK] (NULL)\n", 2);
+    } else {
+        kprint("  zero-size      [FAIL] (not NULL)\n", 4);
+        kfree(ptr5);
+    }
+    kprint("\n", 7);
+    
+    kprint("========================================\n", 7);
+    kprint("          TESTS COMPLETE                \n", 7);
+    kprint("========================================\n\n", 7);
+    
     check_memory_leaks();
 }
 
 void check_memory_leaks(void) {
     char buffer[128];
+    char num_buf[32];
+    size_t leaked = alloc_count - free_count;
+    int i, len;
 
     LOG_TRACE("check_memory_leaks: alloc_count=%zu, free_count=%zu, allocated_memory=%zu\n",
              alloc_count, free_count, allocated_memory);
 
-    kprint(":: Memory leak check\n", 7);
+    kprint("+-----------------------------+\n", 7);
+    kprint("|     MEMORY LEAK CHECK       |\n", 7);
+    kprint("+-----------------------------+\n", 7);
 
-    kprint("Allocated memory: ", 7);
+    // Allocated memory
     format_memory_size(allocated_memory, buffer);
+    kprint("| Allocated memory : ", 7);
     kprint(buffer, 7);
-    kprint("\n", 7);
+    len = 9 - strlen(buffer);
+    for (i = 0; i < len; i++) kprint(" ", 7);
+    kprint("|\n", 7);
 
-    kprint("Alloc count: ", 7);
-    itoa(alloc_count, buffer, 10);
-    kprint(buffer, 7);
-    kprint("\n", 7);
+    // Alloc count
+    itoa(alloc_count, num_buf, 10);
+    kprint("| Allocations      : ", 7);
+    kprint(num_buf, 7);
+    len = 9 - strlen(num_buf);
+    for (i = 0; i < len; i++) kprint(" ", 7);
+    kprint("|\n", 7);
 
-    kprint("Free count: ", 7);
-    itoa(free_count, buffer, 10);
-    kprint(buffer, 7);
-    kprint("\n", 7);
+    // Free count
+    itoa(free_count, num_buf, 10);
+    kprint("| Frees            : ", 7);
+    kprint(num_buf, 7);
+    len = 9 - strlen(num_buf);
+    for (i = 0; i < len; i++) kprint(" ", 7);
+    kprint("|\n", 7);
+
+    // Leaked count
+    itoa(leaked, num_buf, 10);
+    kprint("| Leaked           : ", 7);
+    kprint(num_buf, 7);
+    len = 9 - strlen(num_buf);
+    for (i = 0; i < len; i++) kprint(" ", 7);
+    kprint("|\n", 7);
+
+    kprint("+-----------------------------+\n", 7);
 
     if (alloc_count == free_count) {
         LOG_TRACE("check_memory_leaks: no leaks detected\n");
-        kprint("No memory leaks detected\n", 2);
+        kprint("|         NO LEAKS            |\n", 2);
     } else {
-        LOG_ERROR("check_memory_leaks: leak detected! %zu unfreed allocations\n",
-                 (size_t)alloc_count - (size_t)free_count);
-        kprint("Memory leak detected! ", 4);
-        itoa((int)alloc_count - (int)free_count, buffer, 10);
-        kprint(buffer, 4);
-        kprint(" unfreed allocations\n", 4);
+        LOG_ERROR("check_memory_leaks: leak detected! %zu unfreed allocations\n", leaked);
+        kprint("|       ", 7);
+        kprint("LEAK DETECTED!", 4);
+        kprint("        |\n", 7);
     }
+
+    kprint("+-----------------------------+\n", 7);
+}
+
+uint64_t get_hhdm_offset(void) {
+    return hhdm_offset;
 }

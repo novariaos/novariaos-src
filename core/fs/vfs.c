@@ -13,6 +13,10 @@
 #define DEV_STDOUT_FD 1004
 #define DEV_STDERR_FD 1005
 
+#ifndef VFS_TRUNC
+#define VFS_TRUNC 0x04
+#endif
+
 static vfs_file_t files[MAX_FILES];
 static vfs_handle_t handles[MAX_HANDLES];
 static int next_fd = 3;
@@ -164,7 +168,6 @@ static int allocate_fd(void) {
 }
 
 void vfs_init(void) {
-    // Initialize legacy file table
     for (int i = 0; i < MAX_FILES; i++) {
         files[i].used = false;
         files[i].size = 0;
@@ -178,7 +181,6 @@ void vfs_init(void) {
         files[i].dev_data = NULL;
     }
 
-    // Initialize legacy handles
     for (int i = 0; i < MAX_HANDLES; i++) {
         handles[i].used = false;
         handles[i].fd = -1;
@@ -187,7 +189,6 @@ void vfs_init(void) {
         handles[i].flags = 0;
     }
 
-    // Initialize new VFS tables
     for (int i = 0; i < MAX_REGISTERED_FS; i++) {
         registered_fs[i].registered = false;
         registered_fs[i].ops = NULL;
@@ -208,7 +209,6 @@ void vfs_init(void) {
         file_handles[i].private_data = NULL;
     }
 
-    // Standard file descriptors
     handles[0].used = true;
     handles[0].fd = 0;
     handles[0].flags = VFS_READ;
@@ -221,15 +221,6 @@ void vfs_init(void) {
     handles[2].fd = 2;
     handles[2].flags = VFS_WRITE;
 
-    // Create base directories
-    vfs_mkdir("/home");
-    vfs_mkdir("/tmp");
-    vfs_mkdir("/var");
-    vfs_mkdir("/var/log");
-    vfs_mkdir("/var/cache");
-    vfs_mkdir("/dev");
-
-    // Initialize filesystems
     devfs_init();
     procfs_init();
 }
@@ -262,37 +253,23 @@ int vfs_mkdir(const char* dirname) {
 }
 
 int vfs_create(const char* filename, const char* data, size_t size) {
-    if (strlen(filename) >= MAX_FILENAME) {
-        return -1;
-    }
-    
-    if (size > MAX_FILE_SIZE) {
-        return -2;
-    }
-    
+    if (strlen(filename) >= MAX_FILENAME) return -1;
+    if (size > MAX_FILE_SIZE) return -2;
+
+    int fd = vfs_open(filename, VFS_CREAT | VFS_WRITE | VFS_TRUNC);
+    if (fd < 0) return -3;
+
+    vfs_ssize_t written = vfs_writefd(fd, data, size);
+    vfs_close(fd);
+
+    if (written != (vfs_ssize_t)size) return -4;
+
     for (int i = 0; i < MAX_FILES; i++) {
         if (files[i].used && strcmp(files[i].name, filename) == 0) {
-            if (files[i].type == VFS_TYPE_DIR) {
-                return -4;
-            }
-            memcpy(files[i].data, data, size);
-            files[i].size = size;
             return i;
         }
     }
-    
-    for (int i = 0; i < MAX_FILES; i++) {
-        if (!files[i].used) {
-            strcpy(files[i].name, filename);
-            memcpy(files[i].data, data, size);
-            files[i].size = size;
-            files[i].used = true;
-            files[i].type = VFS_TYPE_FILE;
-            return i;
-        }
-    }
-    
-    return -3;
+    return -5;
 }
 
 int vfs_pseudo_register(const char* filename, 
@@ -338,40 +315,25 @@ int vfs_pseudo_register(const char* filename,
 }
 
 const char* vfs_read(const char* filename, size_t* size) {
-    vfs_file_t* file = NULL;
-    int file_idx = -1;
-    
-    for (int i = 0; i < MAX_FILES; i++) {
-        if (files[i].used && strcmp(files[i].name, filename) == 0) {
-            file = &files[i];
-            file_idx = i;
-            break;
-        }
-    }
-    
-    if (!file) {
-        if (size) *size = 0;
-        return NULL;
-    }
-    
-    if (file->type == VFS_TYPE_DEVICE) {
-        static char dev_buffer[MAX_FILE_SIZE];
-        if (file->ops.read) {
-            vfs_off_t pos = 0;
-            vfs_ssize_t bytes = file->ops.read(file, dev_buffer, 
-                                              MAX_FILE_SIZE, &pos);
-            if (bytes > 0) {
-                if (size) *size = bytes;
-                dev_buffer[bytes] = '\0';
-                return dev_buffer;
-            }
-        }
+    static char buffer[MAX_FILE_SIZE];
+
+    int fd = vfs_open(filename, VFS_READ);
+    if (fd < 0) {
         if (size) *size = 0;
         return NULL;
     }
 
-    if (size) *size = file->size;
-    return file->data;
+    vfs_ssize_t bytes = vfs_readfd(fd, buffer, MAX_FILE_SIZE - 1);
+    vfs_close(fd);
+
+    if (bytes < 0) {
+        if (size) *size = 0;
+        return NULL;
+    }
+
+    buffer[bytes] = '\0';
+    if (size) *size = bytes;
+    return buffer;
 }
 
 int vfs_open(const char* filename, int flags) {
@@ -384,10 +346,39 @@ int vfs_open(const char* filename, int flags) {
         }
     }
     
+    if (!file) {
+        const char* rel_path;
+        vfs_mount_t* mnt = vfs_find_mount(filename, &rel_path);
+        if (mnt && mnt->fs && mnt->fs->ops && mnt->fs->ops->stat) {
+            vfs_stat_t stat;
+            if (mnt->fs->ops->stat(mnt, rel_path, &stat) == 0) {
+                for (int i = 0; i < MAX_FILES; i++) {
+                    if (!files[i].used) {
+                        strcpy(files[i].name, filename);
+                        files[i].size = stat.st_size;
+                        files[i].used = true;
+                        files[i].type = VFS_TYPE_FILE;
+                        files[i].mount = (void*)mnt;
+                        files[i].fs_private = NULL;
+                        file = &files[i];
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    
     if (!file && (flags & VFS_CREAT)) {
-        int idx = vfs_create(filename, "", 0);
-        if (idx < 0) return -1;
-        file = &files[idx];
+        for (int i = 0; i < MAX_FILES; i++) {
+            if (!files[i].used) {
+                strcpy(files[i].name, filename);
+                files[i].size = 0;
+                files[i].used = true;
+                files[i].type = VFS_TYPE_FILE;
+                file = &files[i];
+                break;
+            }
+        }
     }
     
     if (!file) return -1;
@@ -410,6 +401,8 @@ int vfs_open(const char* filename, int flags) {
     handles[handle_idx].file = file;
     handles[handle_idx].position = 0;
     handles[handle_idx].flags = flags;
+    handles[handle_idx].fs_private = file->fs_private;
+    handles[handle_idx].mount = file->mount;
     
     return fd;
 }
@@ -427,10 +420,57 @@ vfs_ssize_t vfs_readfd(int fd, void* buf, size_t count) {
     }
     
     if (file->type == VFS_TYPE_DEVICE) {
-        if (!file->ops.read) {
-            return -EACCES;
-        }
+        if (!file->ops.read) return -EACCES;
         return file->ops.read(file, buf, count, &handle->position);
+    }
+    
+    if (file->mount) {
+        vfs_mount_t* mnt = (vfs_mount_t*)file->mount;
+        if (mnt && mnt->fs && mnt->fs->ops && mnt->fs->ops->read) {
+            vfs_file_handle_t* fh = NULL;
+            for (int i = 0; i < MAX_HANDLES; i++) {
+                if (file_handles[i].used && file_handles[i].fd == fd) {
+                    fh = &file_handles[i];
+                    break;
+                }
+            }
+            
+            if (!fh) {
+                for (int i = 0; i < MAX_HANDLES; i++) {
+                    if (!file_handles[i].used) {
+                        fh = &file_handles[i];
+                        fh->used = true;
+                        fh->fd = fd;
+                        fh->mount = mnt;
+                        fh->position = handle->position;
+                        fh->flags = handle->flags;
+                        
+                        const char* rel_path;
+                        vfs_find_mount(file->name, &rel_path);
+                        strcpy(fh->path, rel_path);
+                        
+                        if (mnt->fs->ops->open) {
+                            int ret = mnt->fs->ops->open(mnt, rel_path, handle->flags, fh);
+                            if (ret < 0) {
+                                fh->used = false;
+                                return ret;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            
+            if (fh) {
+                fh->position = handle->position;
+                vfs_ssize_t result = mnt->fs->ops->read(mnt, fh, buf, count);
+                if (result > 0) {
+                    handle->position += result;
+                }
+                return result;
+            }
+        }
+        return -EIO;
     }
     
     if (handle->position >= file->size) return 0;
@@ -532,14 +572,12 @@ vfs_off_t vfs_seek(int fd, vfs_off_t offset, int whence) {
 }
 
 int vfs_delete(const char* filename) {
-    /* Try mounted filesystem first. */
     const char* rel_path;
     vfs_mount_t* mnt = vfs_find_mount(filename, &rel_path);
     if (mnt && mnt->fs && mnt->fs->ops && mnt->fs->ops->unlink) {
         return mnt->fs->ops->unlink(mnt, rel_path);
     }
 
-    /* Fallback: legacy in-memory file table. */
     for (int i = 0; i < MAX_FILES; i++) {
         if (files[i].used && strcmp(files[i].name, filename) == 0) {
 
@@ -676,12 +714,22 @@ int vfs_ioctl(int fd, unsigned long request, void* arg) {
 }
 
 bool vfs_exists(const char* filename) {
-    for (int i = 0; i < MAX_FILES; i++) {
-        if (files[i].used && strcmp(files[i].name, filename) == 0) {
-            return true;
+        for (int i = 0; i < MAX_FILES; i++) {
+            if (files[i].used && strcmp(files[i].name, filename) == 0) {
+                return true;
+            }
         }
-    }
-    return false;
+        
+        const char* rel_path;
+        vfs_mount_t* mnt = vfs_find_mount(filename, &rel_path);
+        if (mnt && mnt->fs && mnt->fs->ops && mnt->fs->ops->stat) {
+            vfs_stat_t stat;
+            if (mnt->fs->ops->stat(mnt, rel_path, &stat) == 0) {
+                return true;
+            }
+        }
+        
+        return false;
 }
 
 bool vfs_is_dir(const char* path) {
@@ -772,22 +820,16 @@ void vfs_list(void) {
     LOG_DEBUG("Total files: %d\n", count);
 }
 
-// ============================================================================
-// New VFS Abstraction Layer Implementation
-// ============================================================================
-
 int vfs_register_filesystem(const char* name, const vfs_fs_ops_t* ops, uint32_t flags) {
     if (!name || !ops) return -EINVAL;
     if (strlen(name) >= MAX_FS_NAME) return -EINVAL;
 
-    // Check if already registered
     for (int i = 0; i < MAX_REGISTERED_FS; i++) {
         if (registered_fs[i].registered && strcmp(registered_fs[i].name, name) == 0) {
             return -EEXIST;
         }
     }
 
-    // Find free slot
     for (int i = 0; i < MAX_REGISTERED_FS; i++) {
         if (!registered_fs[i].registered) {
             strcpy(registered_fs[i].name, name);
@@ -806,7 +848,6 @@ int vfs_unregister_filesystem(const char* name) {
 
     for (int i = 0; i < MAX_REGISTERED_FS; i++) {
         if (registered_fs[i].registered && strcmp(registered_fs[i].name, name) == 0) {
-            // Check if any mounts are using this FS
             for (int j = 0; j < MAX_MOUNTS; j++) {
                 if (mounts[j].mounted && mounts[j].fs == &registered_fs[i]) {
                     return -EBUSY;
@@ -843,18 +884,15 @@ int vfs_mount_fs(const char* fs_name, const char* mount_point,
         return mkdir_result;
     }
 
-    // Find the filesystem
     vfs_filesystem_t* fs = vfs_find_filesystem(fs_name);
     if (!fs) return -ENODEV;
 
-    // Check if mount point is already in use
     for (int i = 0; i < MAX_MOUNTS; i++) {
         if (mounts[i].mounted && strcmp(mounts[i].mount_point, mount_point) == 0) {
             return -EBUSY;
         }
     }
 
-    // Find free mount slot
     vfs_mount_t* mnt = NULL;
     for (int i = 0; i < MAX_MOUNTS; i++) {
         if (!mounts[i].mounted) {
@@ -865,7 +903,6 @@ int vfs_mount_fs(const char* fs_name, const char* mount_point,
 
     if (!mnt) return -ENOMEM;
 
-    // Initialize mount point
     strcpy(mnt->mount_point, mount_point);
     if (device) {
         strcpy(mnt->device, device);
@@ -877,7 +914,6 @@ int vfs_mount_fs(const char* fs_name, const char* mount_point,
     mnt->ref_count = 0;
     mnt->fs_private = NULL;
 
-    // Call filesystem mount operation
     if (fs->ops && fs->ops->mount) {
         int result = fs->ops->mount(mnt, device, data);
         if (result < 0) {
@@ -897,12 +933,10 @@ int vfs_umount(const char* mount_point) {
         if (mounts[i].mounted && strcmp(mounts[i].mount_point, mount_point) == 0) {
             vfs_mount_t* mnt = &mounts[i];
 
-            // Check for open files
             if (mnt->ref_count > 0) {
                 return -EBUSY;
             }
 
-            // Call filesystem unmount operation
             if (mnt->fs && mnt->fs->ops && mnt->fs->ops->unmount) {
                 int result = mnt->fs->ops->unmount(mnt);
                 if (result < 0) {
@@ -926,15 +960,12 @@ vfs_mount_t* vfs_find_mount(const char* path, const char** relative_path) {
     vfs_mount_t* best_match = NULL;
     size_t best_len = 0;
 
-    // Find longest prefix match
     for (int i = 0; i < MAX_MOUNTS; i++) {
         if (!mounts[i].mounted) continue;
 
         size_t mount_len = strlen(mounts[i].mount_point);
 
-        // Check prefix match
         if (strncmp(path, mounts[i].mount_point, mount_len) == 0) {
-            // Must be at path boundary (/ or end of string)
             if (path[mount_len] == '/' || path[mount_len] == '\0' ||
                 (mount_len == 1 && mounts[i].mount_point[0] == '/')) {
                 if (mount_len > best_len) {
@@ -947,9 +978,7 @@ vfs_mount_t* vfs_find_mount(const char* path, const char** relative_path) {
 
     if (best_match && relative_path) {
         *relative_path = path + best_len;
-        // Skip leading slash in relative path
         if (**relative_path == '/') (*relative_path)++;
-        // Empty path means root of mount
         if (**relative_path == '\0') *relative_path = "";
     }
 
@@ -966,7 +995,6 @@ int vfs_stat(const char* path, vfs_stat_t* stat) {
         return mnt->fs->ops->stat(mnt, rel_path, stat);
     }
 
-    // Fallback: check legacy files
     for (int i = 0; i < MAX_FILES; i++) {
         if (files[i].used && strcmp(files[i].name, path) == 0) {
             stat->st_size = files[i].size;
@@ -992,64 +1020,134 @@ int vfs_readdir(const char* path, vfs_dirent_t* entries, size_t max_entries) {
 
     const char* rel_path;
     vfs_mount_t* mnt = vfs_find_mount(path, &rel_path);
+    int count = 0;
 
     if (mnt && mnt->fs && mnt->fs->ops && mnt->fs->ops->readdir) {
-        return mnt->fs->ops->readdir(mnt, rel_path, entries, max_entries);
-    }
+        int fs_count = mnt->fs->ops->readdir(mnt, rel_path, entries, max_entries);
+        if (fs_count > 0) {
+            count = fs_count;
+        }
+    } 
+    else {
+        size_t path_len = strlen(path);
 
-    // Fallback: enumerate legacy files in directory
-    int count = 0;
-    size_t path_len = strlen(path);
-
-    char normalized_path[MAX_FILENAME];
-    strcpy(normalized_path, path);
-    if (path_len > 1 && normalized_path[path_len - 1] == '/') {
-        normalized_path[path_len - 1] = '\0';
-        path_len--;
-    }
-
-    for (int i = 0; i < MAX_FILES && (size_t)count < max_entries; i++) {
-        if (!files[i].used) continue;
-
-        const char* name = files[i].name;
-        size_t name_len = strlen(name);
-
-        // Check if file is direct child of path
-        bool is_child = false;
-
-        if (path_len == 1 && normalized_path[0] == '/') {
-            // Root directory
-            if (name[0] == '/' && name_len > 1) {
-                int slashes = 0;
-                for (size_t j = 1; j < name_len; j++) {
-                    if (name[j] == '/') slashes++;
-                }
-                is_child = (slashes == 0);
-            }
-        } else {
-            // Other directories
-            if (name_len > path_len && name[path_len] == '/' &&
-                strncmp(name, normalized_path, path_len) == 0) {
-                int slashes = 0;
-                for (size_t j = path_len + 1; j < name_len; j++) {
-                    if (name[j] == '/') slashes++;
-                }
-                is_child = (slashes == 0);
-            }
+        char normalized_path[MAX_FILENAME];
+        strcpy(normalized_path, path);
+        if (path_len > 1 && normalized_path[path_len - 1] == '/') {
+            normalized_path[path_len - 1] = '\0';
+            path_len--;
         }
 
-        if (is_child) {
-            // Extract basename
-            const char* basename = name;
+        for (int i = 0; i < MAX_FILES && (size_t)count < max_entries; i++) {
+            if (!files[i].used) continue;
+
+            const char* name = files[i].name;
+            size_t name_len = strlen(name);
+
+            bool is_child = false;
+
             if (path_len == 1 && normalized_path[0] == '/') {
-                basename = name + 1;
+                if (name[0] == '/' && name_len > 1) {
+                    int slashes = 0;
+                    for (size_t j = 1; j < name_len; j++) {
+                        if (name[j] == '/') slashes++;
+                    }
+                    is_child = (slashes == 0);
+                }
             } else {
-                basename = name + path_len + 1;
+                if (name_len > path_len && name[path_len] == '/' &&
+                    strncmp(name, normalized_path, path_len) == 0) {
+                    int slashes = 0;
+                    for (size_t j = path_len + 1; j < name_len; j++) {
+                        if (name[j] == '/') slashes++;
+                    }
+                    is_child = (slashes == 0);
+                }
             }
 
-            strcpy(entries[count].d_name, basename);
-            entries[count].d_type = files[i].type;
-            count++;
+            if (is_child) {
+                const char* basename = name;
+                if (path_len == 1 && normalized_path[0] == '/') {
+                    basename = name + 1;
+                } else {
+                    basename = name + path_len + 1;
+                }
+
+                strcpy(entries[count].d_name, basename);
+                entries[count].d_type = files[i].type;
+                count++;
+            }
+        }
+    }
+
+    if (count < (int)max_entries) {
+        size_t path_len = strlen(path);
+
+        for (int i = 0; i < MAX_MOUNTS; i++) {
+            if (!mounts[i].mounted) continue;
+            
+            const char* mount_point = mounts[i].mount_point;
+            size_t mount_len = strlen(mount_point);
+            
+            bool is_child = false;
+            const char* basename = NULL;
+            
+            if (path_len == 1 && path[0] == '/') {
+                if (mount_point[0] == '/' && mount_len > 1) {
+                    int slash_pos = 1;
+                    while (slash_pos < (int)mount_len && mount_point[slash_pos] != '/') {
+                        slash_pos++;
+                    }
+                    
+                    if (slash_pos == (int)mount_len || mount_point[slash_pos] == '/') {
+                        is_child = true;
+                        static char first_component[MAX_FILENAME];
+                        int j;
+                        for (j = 1; j < slash_pos && j < MAX_FILENAME-1; j++) {
+                            first_component[j-1] = mount_point[j];
+                        }
+                        first_component[j-1] = '\0';
+                        basename = first_component;
+                    }
+                }
+            } else {
+                if (mount_len > path_len && strncmp(mount_point, path, path_len) == 0) {
+                    if (mount_point[path_len] == '/') {
+                        int start = path_len + 1;
+                        int end = start;
+                        while (end < (int)mount_len && mount_point[end] != '/') {
+                            end++;
+                        }
+
+                        if (end == (int)mount_len || mount_point[end] == '/') {
+                            is_child = true;
+                            static char component[MAX_FILENAME];
+                            int j;
+                            for (j = start; j < end && j-start < MAX_FILENAME-1; j++) {
+                                component[j-start] = mount_point[j];
+                            }
+                            component[j-start] = '\0';
+                            basename = component;
+                        }
+                    }
+                }
+            }
+            
+            if (is_child && basename) {
+                bool already_exists = false;
+                for (int j = 0; j < count; j++) {
+                    if (strcmp(entries[j].d_name, basename) == 0) {
+                        already_exists = true;
+                        break;
+                    }
+                }
+                
+                if (!already_exists && count < (int)max_entries) {
+                    strcpy(entries[count].d_name, basename);
+                    entries[count].d_type = VFS_TYPE_DIR;
+                    count++;
+                }
+            }
         }
     }
 

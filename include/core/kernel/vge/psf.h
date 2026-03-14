@@ -6,6 +6,7 @@
 #define PSF1_MAGIC 0x0436
 #define PSF2_MAGIC 0x864ab572
 #define PSF2_HAS_UNICODE_TABLE 0x01
+#define FONT_HEIGHT 16
 
 struct psf2_header {
     uint32_t magic;       // 0x864ab572
@@ -17,5 +18,7 @@ struct psf2_header {
     uint32_t height;      // height in pixels
     uint32_t width;       // width in pixels (regular 8)
 };
+
+int load_font_from_vfs(const char* path, uint8_t font[256][FONT_HEIGHT]);
 
 #endif

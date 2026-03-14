@@ -4,12 +4,8 @@
 #include <core/kernel/mem.h>
 #include <core/kernel/kstd.h>
 #include <core/kernel/vge/fb_render.h>
-
-#define FONT_HEIGHT 16
-
-// External declarations
-extern int load_font_from_vfs(const char* path, uint8_t font[256][FONT_HEIGHT]);
-extern bool vfs_exists(const char* filename);
+#include <core/kernel/vge/psf.h>
+#include <core/fs/vfs.h>
 
 int system_font_height = 16;
 uint8_t system_font[256][FONT_HEIGHT];

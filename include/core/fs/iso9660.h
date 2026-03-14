@@ -87,6 +87,6 @@ void iso9660_list_dir(const char* path);
 bool iso9660_is_initialized(void);
 
 // Mount ISO contents to VFS at specified path
-void iso9660_mount_to_vfs(const char* mount_point, const char* iso_path);
+int iso9660_mount_to_vfs(const char* mount_point, const char* iso_path);
 
 #endif // ISO9660_H

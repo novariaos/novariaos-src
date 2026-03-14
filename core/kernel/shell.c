@@ -9,7 +9,6 @@
 #include <core/fs/vfs.h>
 #include <core/kernel/nvm/nvm.h>
 #include <core/kernel/nvm/caps.h>
-#include <core/kernel/userspace.h>
 #include <log.h>
 #include <core/arch/work_queue.h>
 #include <core/arch/smp.h>
@@ -34,17 +33,33 @@ static void cmd_help(void) {
 }
 
 static void cmd_mount(int argc, char* argv[]) {
-    if (argc < 4) {
-        kprint("Usage: mount <fstype> <device> <mountpoint>\n", 7);
-        kprint("  e.g. mount ext2 hda /mnt/disk\n", 7);
+    if (argc < 3) {
+        kprint("Usage: mount <fstype> <device>\n", 7);
+        kprint("  e.g. mount ext2 hda\n", 7);
+        kprint("  mounts to /mnt/<device> automatically\n", 7);
         return;
     }
+    
     const char* fstype = argv[1];
     const char* device = argv[2];
-    const char* mntpoint = argv[3];
+    
+    char mntpoint[64]; 
+    char* p = mntpoint;
+    
+    *p++ = '/';
+    *p++ = 'm';
+    *p++ = 'n';
+    *p++ = 't';
+    *p++ = '/';
+
+    const char* d = device;
+    while (*d && (p - mntpoint < sizeof(mntpoint) - 1)) {
+        *p++ = *d++;
+    }
+    *p = '\0';
 
     vfs_mkdir(mntpoint);
-
+    
     int rc = vfs_mount_fs(fstype, mntpoint, device, 0, NULL);
     if (rc == 0) {
         kprint("Mounted ", 7);
@@ -101,40 +116,40 @@ static void cmd_cat(const char* args) {
         strcat(full_path, path);
     }
 
-    {
-        const char* rel = NULL;
-        vfs_mount_t* mnt = vfs_find_mount(full_path, &rel);
-        if (mnt && mnt->fs && mnt->fs->ops) {
-            const vfs_fs_ops_t* ops = mnt->fs->ops;
-            char rel_path[MAX_PATH_LENGTH];
-            rel_path[0] = '/';
-            strcpy_safe(rel_path + 1, rel, MAX_PATH_LENGTH - 1);
+    // Try mounted filesystem first
+    const char* rel = NULL;
+    vfs_mount_t* mnt = vfs_find_mount(full_path, &rel);
+    if (mnt && mnt->fs && mnt->fs->ops) {
+        const vfs_fs_ops_t* ops = mnt->fs->ops;
+        char rel_path[MAX_PATH_LENGTH];
+        rel_path[0] = '/';
+        strcpy_safe(rel_path + 1, rel, MAX_PATH_LENGTH - 1);
 
-            vfs_stat_t st;
-            int src = ops->stat ? ops->stat(mnt, rel_path, &st) : -1;
-            if (src == 0 && (st.st_mode & 0xF000) != 0x4000) { // not a dir
-                vfs_file_handle_t h;
-                memset(&h, 0, sizeof(h));
-                h.position = 0;
-                h.flags = VFS_READ;
-                int rc = ops->open ? ops->open(mnt, rel_path, VFS_READ, &h) : -1;
-                if (rc == 0) {
-                    char buf[256];
-                    vfs_ssize_t n;
-                    while ((n = ops->read(mnt, &h, buf, sizeof(buf))) > 0) {
-                        for (vfs_ssize_t i = 0; i < n; i++) {
-                            char c[2] = {buf[i], '\0'};
-                            kprint(c, 15);
-                        }
+        vfs_stat_t st;
+        int rc = ops->stat ? ops->stat(mnt, rel_path, &st) : -1;
+        if (rc == 0 && (st.st_mode & 0xF000) != 0x4000) { // not a dir
+            vfs_file_handle_t h;
+            memset(&h, 0, sizeof(h));
+            h.position = 0;
+            h.flags = VFS_READ;
+            rc = ops->open ? ops->open(mnt, rel_path, VFS_READ, &h) : -1;
+            if (rc == 0) {
+                char buf[256];
+                vfs_ssize_t n;
+                while ((n = ops->read(mnt, &h, buf, sizeof(buf))) > 0) {
+                    for (vfs_ssize_t i = 0; i < n; i++) {
+                        char c[2] = {buf[i], '\0'};
+                        kprint(c, 15);
                     }
-                    if (ops->close) ops->close(mnt, &h);
-                    kprint("\n", 7);
-                    return;
                 }
+                if (ops->close) ops->close(mnt, &h);
+                kprint("\n", 7);
+                return;
             }
         }
     }
 
+    // Fallback to legacy VFS
     size_t size;
     const char* data = vfs_read(full_path, &size);
     if (data == NULL) {
@@ -170,10 +185,13 @@ static void cmd_ls(const char* args) {
     if (flen > 1 && full_path[flen-1] == '/')
         full_path[--flen] = '\0';
 
-    int found_count = 0;
-
+    // Try mounted filesystem first
     vfs_dirent_t* entries = kmalloc(32 * sizeof(vfs_dirent_t));
-    if (!entries) { kprint("ls: out of memory\n", 7); return; }
+    if (!entries) { 
+        kprint("ls: out of memory\n", 7); 
+        return; 
+    }
+    
     int n = vfs_readdir(full_path, entries, 32);
     if (n > 0) {
         for (int i = 0; i < n; i++) {
@@ -184,7 +202,6 @@ static void cmd_ls(const char* args) {
                 kprint(entries[i].d_name, 15);
             }
             kprint("    ", 7);
-            found_count++;
         }
         kfree(entries);
         kprint("\n", 7);
@@ -235,7 +252,6 @@ static void cmd_ls(const char* args) {
         }
 
         if (should_show) {
-            found_count++;
             if (files[i].type == VFS_TYPE_DIR) {
                 kprint(display_name, 9);
                 kprint("/", 9);
@@ -588,6 +604,14 @@ static void normalize_path(const char* input_path, char* output) {
 }
 
 static bool directory_exists(const char* path) {
+    vfs_stat_t st;
+    int rc = vfs_stat(path, &st);
+    
+    if (rc == 0 && (st.st_mode & VFS_S_IFDIR)) {
+        return true;
+    }
+    
+    // Fallback to legacy VFS for backward compatibility
     vfs_file_t* files = vfs_get_files();
     size_t path_len = strlen(path);
     

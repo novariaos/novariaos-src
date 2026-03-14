@@ -13,6 +13,7 @@
 #include <core/drivers/ramdisk.h>
 #include <core/drivers/ide.h>
 #include <core/drivers/nvme.h>
+#include <core/drivers/ahci.h>
 #include <core/kernel/shell.h>
 #include <log.h>
 #include <core/fs/iso9660.h>
@@ -30,6 +31,7 @@
 #include <core/arch/work_queue.h>
 #include <core/kernel/mem/slab.h>
 #include <core/kernel/mem/cpu_pool.h>
+#include <core/arch/panic.h>
 
 // Limine requests
 static volatile struct limine_module_request module_request = {
@@ -84,8 +86,8 @@ static void show_banner(void) {
 static void early_init(void) {
     init_fb();
     kprint(":: Initializing memory manager...\n", 7);
-    initializeMemoryManager();
     init_serial();
+    memory_manager_init();
 }
 
 static void fs_init(void) {
@@ -94,6 +96,7 @@ static void fs_init(void) {
 
     ide_init();
     nvme_init();
+    ahci_init();
     fat32_init();
     ext2_init();
 

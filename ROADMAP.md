@@ -13,7 +13,7 @@
     - [x] Slab
         - [x] Slab allocation
         - [x] Slab free
-    - [x] Kstd allocations (WIP: current stage — buddy only)
+    - [x] Kstd allocations
         - [x] kmalloc
         - [x] kfree
 - [x] EXT2 Filesystem Driver (Initial support)
@@ -21,7 +21,7 @@
     - [x] Bitmap management & Resource allocation (#14)
     - [x] Inode and Directory entry management (#14)
     - [x] Basic Read/Write operations
-- [ ] FAT32 Filesystem Driver (Initial support)
+- [x] FAT32 Filesystem Driver (Initial support)
     - [x] Boot sector and FAT parsing
     - [x] Cluster chain management
     - [x] Directory entry reading
@@ -48,11 +48,27 @@
     - [x] PCI enumeration for NVMe devices
     - [x] Multiple namespace support
 
-## Medium Priority
-- [ ] /dev/tty (WIP: current stage — write only)
-- [ ] Poor /sys/pci (vendor/device without interrupts)
+- [ ] AHCI (SATA) Driver
+    - [x] PCI bus scan for AHCI controller (class 01h/06h)
+    - [x] ABAR (BAR5) discovery and MMIO mapping
+    - [x] GHC AHCI enable and controller version detection
+    - [x] Port enumeration and device type detection
+    - [x] Command list and FIS receive buffer allocation (port rebase)
+    - [x] IDENTIFY DEVICE command (LBA48 and LBA28 sector count)
+    - [x] DMA read operations (READ DMA EXT, LBA48)
+    - [x] DMA write operations (WRITE DMA EXT, LBA48)
+    - [x] Block device registration (sda, sdb, ...)
+    - [ ] Interrupt-based I/O (currently uses polling)
+    - [ ] Hot-plug support (port change detection)
+    - [ ] ATAPI device support
+    - [ ] NCQ (Native Command Queuing)
+    - [ ] Port multiplier support
+    - [ ] Error recovery and port reset
 
 ## Low Priority 
+_Actually, not needed for the current project state_
+- [ ] /dev/tty (WIP: current stage — write only)
+- [ ] Poor /sys/pci (vendor/device without interrupts)
 - [ ] Shell's removal from the kernel
 - [ ] Nutils:
     - [ ] cat
