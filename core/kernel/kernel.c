@@ -30,6 +30,7 @@
 #include <core/arch/work_queue.h>
 #include <core/kernel/mem/slab.h>
 #include <core/kernel/mem/cpu_pool.h>
+#include <core/arch/panic.h>
 
 // Limine requests
 static volatile struct limine_module_request module_request = {
@@ -84,8 +85,8 @@ static void show_banner(void) {
 static void early_init(void) {
     init_fb();
     kprint(":: Initializing memory manager...\n", 7);
-    initializeMemoryManager();
     init_serial();
+    memory_manager_init();
 }
 
 static void fs_init(void) {

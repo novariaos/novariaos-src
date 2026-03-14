@@ -6,18 +6,33 @@
 #include <core/kernel/vge/fb_render.h>
 #include <core/kernel/mem.h>
 #include <string.h>
+#include <errno.h>
 
 static uint8_t* iso_data = NULL;
 static size_t iso_data_size = 0;
-static iso9660_pvd_t* primary_volume = NULL;
-static uint16_t block_size = 2048;
 static bool initialized = false;
 
-static const uint8_t* read_block(uint32_t lba) {
-    if (!iso_data || (size_t)lba * block_size >= iso_data_size) {
+typedef struct iso9660_mount {
+    uint8_t* data;
+    size_t size;
+    uint16_t block_size;
+    iso9660_pvd_t pvd;
+    int ref_count;
+} iso9660_mount_t;
+
+typedef struct iso9660_file {
+    uint32_t extent;
+    uint32_t size;
+    uint32_t position;
+    uint32_t flags;
+    iso9660_mount_t* fs;
+} iso9660_file_t;
+
+static const uint8_t* iso_read_block(iso9660_mount_t* fs, uint32_t lba) {
+    if (!fs || (size_t)lba * fs->block_size >= fs->size) {
         return NULL;
     }
-    return iso_data + lba * block_size;
+    return fs->data + lba * fs->block_size;
 }
 
 static void normalize_filename(const char* iso_name, size_t iso_len, char* out, size_t out_size) {
@@ -42,8 +57,8 @@ static void to_lowercase(char* str) {
     }
 }
 
-static iso9660_dir_entry_t* find_entry_in_dir(uint32_t dir_extent, uint32_t dir_size, const char* name) {
-    const uint8_t* dir_data = read_block(dir_extent);
+static iso9660_dir_entry_t* find_entry_in_dir(iso9660_mount_t* fs, uint32_t dir_extent, uint32_t dir_size, const char* name) {
+    const uint8_t* dir_data = iso_read_block(fs, dir_extent);
     if (!dir_data) return NULL;
 
     size_t offset = 0;
@@ -61,8 +76,13 @@ static iso9660_dir_entry_t* find_entry_in_dir(uint32_t dir_extent, uint32_t dir_
 
         char normalized[256];
         normalize_filename(entry_name, name_len, normalized, sizeof(normalized));
+        to_lowercase(normalized);
 
-        if (strcmp(normalized, name) == 0) {
+        char name_lower[256];
+        strcpy(name_lower, name);
+        to_lowercase(name_lower);
+
+        if (strcmp(normalized, name_lower) == 0) {
             return entry;
         }
 
@@ -72,146 +92,400 @@ static iso9660_dir_entry_t* find_entry_in_dir(uint32_t dir_extent, uint32_t dir_
     return NULL;
 }
 
-void iso9660_init(void* iso_start, size_t iso_size) {
-    iso_data = (uint8_t*)iso_start;
-    iso_data_size = iso_size;
+// VFS Filesystem Operations
+static int iso9660_mount(vfs_mount_t* mnt, const char* device, void* data) {
+    (void)data;
+    
+    if (!device) return -EINVAL;
+    
+    if (!iso_data || !initialized) {
+        return -ENODEV;
+    }
+    
+    iso9660_mount_t* fs_data = (iso9660_mount_t*)kmalloc(sizeof(iso9660_mount_t));
+    if (!fs_data) return -ENOMEM;
+    
+    fs_data->data = iso_data;
+    fs_data->size = iso_data_size;
+    fs_data->block_size = 2048;
+    fs_data->ref_count = 1;
 
     for (int i = 16; i < 32; i++) {
-        const uint8_t* block = read_block(i);
-        if (!block) return;
-
+        const uint8_t* block = iso_read_block(fs_data, i);
+        if (!block) continue;
+        
         iso9660_pvd_t* vd = (iso9660_pvd_t*)block;
-
         if (vd->type == 1 && strncmp(vd->identifier, "CD001", 5) == 0) {
-            primary_volume = vd;
-            block_size = vd->logical_block_size_le;
-            initialized = true;
-            return;
+            memcpy(&fs_data->pvd, vd, sizeof(iso9660_pvd_t));
+            fs_data->block_size = vd->logical_block_size_le;
+            break;
         }
-
-        if (vd->type == 255) break;
     }
+    
+    mnt->fs_private = fs_data;
+    return 0;
 }
 
-const void* iso9660_find_file(const char* path, size_t* size) {
-    if (!initialized || !primary_volume) {
-        if (size) *size = 0;
-        return NULL;
+static int iso9660_unmount(vfs_mount_t* mnt) {
+    if (!mnt || !mnt->fs_private) return -EINVAL;
+    
+    iso9660_mount_t* fs_data = (iso9660_mount_t*)mnt->fs_private;
+    fs_data->ref_count--;
+    
+    if (fs_data->ref_count <= 0) {
+        kfree(fs_data);
     }
+    
+    mnt->fs_private = NULL;
+    return 0;
+}
 
-    iso9660_dir_entry_t* root = (iso9660_dir_entry_t*)primary_volume->root_directory_entry;
+static int iso9660_open(vfs_mount_t* mnt, const char* path, int flags, vfs_file_handle_t* h) {
+    if (!mnt || !path || !h) return -EINVAL;
+    if (flags & VFS_WRITE) return -EROFS;
+    
+    iso9660_mount_t* fs_data = (iso9660_mount_t*)mnt->fs_private;
+    if (!fs_data) return -EINVAL;
+
+    iso9660_dir_entry_t* root = (iso9660_dir_entry_t*)fs_data->pvd.root_directory_entry;
     uint32_t current_extent = root->extent_le;
     uint32_t current_size = root->size_le;
+    
+    if (path[0] == '/') path++;
+    
+    if (path[0] == '\0') {
+        iso9660_file_t* file_data = (iso9660_file_t*)kmalloc(sizeof(iso9660_file_t));
+        if (!file_data) return -ENOMEM;
+        
+        file_data->extent = current_extent;
+        file_data->size = current_size;
+        file_data->position = 0;
+        file_data->flags = flags;
+        file_data->fs = fs_data;
+        
+        h->private_data = file_data;
+        strcpy(h->path, path);
+        return 0;
+    }
 
     char path_copy[256];
-    size_t path_len = strlen(path);
-    if (path_len >= sizeof(path_copy)) {
-        if (size) *size = 0;
-        return NULL;
-    }
-
-    size_t j = 0;
-    for (size_t i = 0; i < path_len; i++) {
-        if (path[i] == '/' && j > 0 && path_copy[j-1] == '/') continue;
-        path_copy[j++] = path[i];
-    }
-    path_copy[j] = '\0';
-
-    char* search_path = path_copy;
-    if (search_path[0] == '/') search_path++;
-
-    if (search_path[0] == '\0') {
-        if (size) *size = current_size;
-        return read_block(current_extent);
-    }
-
-    char* token = search_path;
+    strcpy(path_copy, path);
+    
+    char* token = path_copy;
     while (*token) {
         char* next_slash = token;
         while (*next_slash && *next_slash != '/') next_slash++;
-
+        
         char component[256];
         size_t comp_len = next_slash - token;
-        if (comp_len >= sizeof(component)) {
-            if (size) *size = 0;
-            return NULL;
-        }
-        for (size_t k = 0; k < comp_len; k++) {
-            component[k] = token[k];
-        }
+        if (comp_len >= sizeof(component)) return -ENAMETOOLONG;
+        
+        memcpy(component, token, comp_len);
         component[comp_len] = '\0';
-
-        iso9660_dir_entry_t* entry = find_entry_in_dir(current_extent, current_size, component);
-        if (!entry) {
-            if (size) *size = 0;
-            return NULL;
-        }
-
+        
+        iso9660_dir_entry_t* entry = find_entry_in_dir(fs_data, current_extent, current_size, component);
+        if (!entry) return -ENOENT;
+        
         current_extent = entry->extent_le;
         current_size = entry->size_le;
-
+        
         token = next_slash;
         if (*token == '/') token++;
     }
 
-    if (size) *size = current_size;
-    return read_block(current_extent);
+    iso9660_file_t* file_data = (iso9660_file_t*)kmalloc(sizeof(iso9660_file_t));
+    if (!file_data) return -ENOMEM;
+    
+    file_data->extent = current_extent;
+    file_data->size = current_size;
+    file_data->position = 0;
+    file_data->flags = flags;
+    file_data->fs = fs_data;
+    
+    h->private_data = file_data;
+    strcpy(h->path, path);
+    return 0;
 }
 
-void iso9660_list_dir(const char* path) {
-    if (!initialized || !primary_volume) {
-        kprint("ISO9660 not initialized\n", 14);
-        return;
+static int iso9660_close(vfs_mount_t* mnt, vfs_file_handle_t* h) {
+    (void)mnt;
+    
+    if (!h || !h->private_data) return -EINVAL;
+    
+    kfree(h->private_data);
+    h->private_data = NULL;
+    return 0;
+}
+
+static vfs_ssize_t iso9660_read(vfs_mount_t* mnt, vfs_file_handle_t* h, void* buf, size_t count) {
+    if (!mnt || !h || !buf) return -EINVAL;
+    
+    iso9660_file_t* file = (iso9660_file_t*)h->private_data;
+    if (!file) return -EINVAL;
+    
+    iso9660_mount_t* fs_data = file->fs;
+    if (!fs_data) return -EINVAL;
+    
+    if (file->position >= file->size) return 0;
+    
+    size_t remaining = file->size - file->position;
+    size_t to_read = count < remaining ? count : remaining;
+    
+    uint32_t block = file->extent + (file->position / fs_data->block_size);
+    size_t offset = file->position % fs_data->block_size;
+    
+    const uint8_t* data = iso_read_block(fs_data, block);
+    if (!data) return -EIO;
+    
+    if (offset + to_read <= fs_data->block_size) {
+        memcpy(buf, data + offset, to_read);
+        file->position += to_read;
+        h->position = file->position;
+        return to_read;
+    }
+    
+    size_t total_read = 0;
+    uint8_t* buf_ptr = (uint8_t*)buf;
+    
+    while (to_read > 0) {
+        data = iso_read_block(fs_data, block);
+        if (!data) break;
+        
+        size_t chunk = fs_data->block_size - offset;
+        if (chunk > to_read) chunk = to_read;
+        
+        memcpy(buf_ptr, data + offset, chunk);
+        
+        buf_ptr += chunk;
+        file->position += chunk;
+        total_read += chunk;
+        to_read -= chunk;
+        
+        block++;
+        offset = 0;
+    }
+    
+    h->position = file->position;
+    return total_read;
+}
+
+static vfs_ssize_t iso9660_write(vfs_mount_t* mnt, vfs_file_handle_t* h, const void* buf, size_t count) {
+    (void)mnt; (void)h; (void)buf; (void)count;
+    return -EROFS;
+}
+
+static vfs_off_t iso9660_seek(vfs_mount_t* mnt, vfs_file_handle_t* h, vfs_off_t offset, int whence) {
+    (void)mnt;
+    
+    if (!h || !h->private_data) return -EINVAL;
+    
+    iso9660_file_t* file = (iso9660_file_t*)h->private_data;
+    vfs_off_t new_pos;
+    
+    switch (whence) {
+        case VFS_SEEK_SET:
+            new_pos = offset;
+            break;
+        case VFS_SEEK_CUR:
+            new_pos = file->position + offset;
+            break;
+        case VFS_SEEK_END:
+            new_pos = file->size + offset;
+            break;
+        default:
+            return -EINVAL;
+    }
+    
+    if (new_pos < 0) new_pos = 0;
+    if (new_pos > file->size) new_pos = file->size;
+    
+    file->position = new_pos;
+    h->position = new_pos;
+    return new_pos;
+}
+
+static int iso9660_stat(vfs_mount_t* mnt, const char* path, vfs_stat_t* stat) {
+    if (!mnt || !path || !stat) return -EINVAL;
+    
+    iso9660_mount_t* fs_data = (iso9660_mount_t*)mnt->fs_private;
+    if (!fs_data) return -EINVAL;
+
+    iso9660_dir_entry_t* root = (iso9660_dir_entry_t*)fs_data->pvd.root_directory_entry;
+    uint32_t current_extent = root->extent_le;
+    uint32_t current_size = root->size_le;
+    
+    if (path[0] == '/') path++;
+    
+    if (path[0] == '\0') {
+        stat->st_size = current_size;
+        stat->st_mode = VFS_S_IFDIR | 0555;
+        stat->st_blksize = fs_data->block_size;
+        stat->st_mtime = 0;
+        return 0;
     }
 
-    size_t dir_size;
-    const uint8_t* dir_data = (const uint8_t*)iso9660_find_file(path, &dir_size);
+    char path_copy[256];
+    strcpy(path_copy, path);
+    
+    char* token = path_copy;
+    while (*token) {
+        char* next_slash = token;
+        while (*next_slash && *next_slash != '/') next_slash++;
+        
+        char component[256];
+        size_t comp_len = next_slash - token;
+        if (comp_len >= sizeof(component)) return -ENAMETOOLONG;
+        
+        memcpy(component, token, comp_len);
+        component[comp_len] = '\0';
+        
+        iso9660_dir_entry_t* entry = find_entry_in_dir(fs_data, current_extent, current_size, component);
+        if (!entry) return -ENOENT;
+        
+        bool is_last = (*next_slash == '\0');
+        
+        if (is_last) {
+            stat->st_size = entry->size_le;
+            stat->st_blksize = fs_data->block_size;
+            stat->st_mtime = 0;
+            
+            if (entry->flags & ISO_FLAG_DIRECTORY) {
+                stat->st_mode = VFS_S_IFDIR | 0555;
+            } else {
+                stat->st_mode = VFS_S_IFREG | 0444;
+            }
+            return 0;
+        }
+        
+        current_extent = entry->extent_le;
+        current_size = entry->size_le;
+        
+        token = next_slash;
+        if (*token == '/') token++;
+    }
+    
+    return -ENOENT;
+}
 
-    if (!dir_data) {
-        kprint("Directory not found: ", 14);
-        kprint(path, 14);
-        kprint("\n", 14);
-        return;
+static int iso9660_readdir(vfs_mount_t* mnt, const char* path, vfs_dirent_t* entries, size_t max_entries) {
+    if (!mnt || !path || !entries || max_entries == 0) return -EINVAL;
+    
+    iso9660_mount_t* fs_data = (iso9660_mount_t*)mnt->fs_private;
+    if (!fs_data) return -EINVAL;
+
+    vfs_stat_t st;
+    int rc = iso9660_stat(mnt, path, &st);
+    if (rc < 0) return rc;
+    
+    if (!(st.st_mode & VFS_S_IFDIR)) return -ENOTDIR;
+
+    iso9660_dir_entry_t* root = (iso9660_dir_entry_t*)fs_data->pvd.root_directory_entry;
+    uint32_t dir_extent = root->extent_le;
+    uint32_t dir_size = root->size_le;
+    
+    if (path[0] != '\0' && strcmp(path, "/") != 0) {
+        char path_copy[256];
+        strcpy(path_copy, path);
+        
+        uint32_t current_extent = root->extent_le;
+        uint32_t current_size = root->size_le;
+        
+        char* token = path_copy;
+        if (token[0] == '/') token++;
+        
+        while (*token) {
+            char* next_slash = token;
+            while (*next_slash && *next_slash != '/') next_slash++;
+            
+            char component[256];
+            size_t comp_len = next_slash - token;
+            if (comp_len >= sizeof(component)) return -ENAMETOOLONG;
+            
+            memcpy(component, token, comp_len);
+            component[comp_len] = '\0';
+            
+            iso9660_dir_entry_t* entry = find_entry_in_dir(fs_data, current_extent, current_size, component);
+            if (!entry) return -ENOENT;
+            
+            current_extent = entry->extent_le;
+            current_size = entry->size_le;
+            
+            token = next_slash;
+            if (*token == '/') token++;
+        }
+        
+        dir_extent = current_extent;
+        dir_size = current_size;
     }
 
-    kprint("Contents of ", 7);
-    kprint(path, 7);
-    kprint(":\n", 7);
-
+    const uint8_t* dir_data = iso_read_block(fs_data, dir_extent);
+    if (!dir_data) return -EIO;
+    
     size_t offset = 0;
-    while (offset < dir_size) {
+    int count = 0;
+    
+    while (offset < dir_size && count < (int)max_entries) {
         iso9660_dir_entry_t* entry = (iso9660_dir_entry_t*)(dir_data + offset);
         if (entry->length == 0) break;
-
+        
         char* entry_name = (char*)(entry + 1);
         uint8_t name_len = entry->name_len;
-
+        
         if (name_len == 1 && (entry_name[0] == 0 || entry_name[0] == 1)) {
             offset += entry->length;
             continue;
         }
-
+        
         char normalized[256];
         normalize_filename(entry_name, name_len, normalized, sizeof(normalized));
-
-        kprint("  ", 7);
-        if (entry->flags & ISO_FLAG_DIRECTORY) {
-            kprint("[DIR]  ", 11);
-        } else {
-            kprint("[FILE] ", 7);
-        }
-        kprint(normalized, 11);
-
-        if (!(entry->flags & ISO_FLAG_DIRECTORY)) {
-            kprint(" (", 7);
-            char buf[32];
-            itoa(entry->size_le, buf, 10);
-            kprint(buf, 7);
-            kprint(" bytes)", 7);
-        }
-        kprint("\n", 7);
-
+        to_lowercase(normalized);
+        
+        strcpy(entries[count].d_name, normalized);
+        entries[count].d_type = (entry->flags & ISO_FLAG_DIRECTORY) ? VFS_TYPE_DIR : VFS_TYPE_FILE;
+        
+        count++;
         offset += entry->length;
+    }
+    
+    return count;
+}
+
+// VFS operations table
+static const vfs_fs_ops_t iso9660_ops = {
+    .mount = iso9660_mount,
+    .unmount = iso9660_unmount,
+    .open = iso9660_open,
+    .close = iso9660_close,
+    .read = iso9660_read,
+    .write = iso9660_write,
+    .seek = iso9660_seek,
+    .stat = iso9660_stat,
+    .readdir = iso9660_readdir,
+    .mkdir = NULL,
+    .rmdir = NULL,
+    .unlink = NULL,
+    .ioctl = NULL,
+    .sync = NULL
+};
+
+void iso9660_init(void* iso_start, size_t iso_size) {
+    iso_data = (uint8_t*)iso_start;
+    iso_data_size = iso_size;
+    
+    for (int i = 16; i < 32; i++) {
+        if ((size_t)i * 2048 >= iso_size) break;
+        
+        const uint8_t* block = iso_data + i * 2048;
+        iso9660_pvd_t* vd = (iso9660_pvd_t*)block;
+        
+        if (vd->type == 1 && strncmp(vd->identifier, "CD001", 5) == 0) {
+            initialized = true;
+            break;
+        }
+    }
+    
+    if (initialized) {
+        vfs_register_filesystem("iso9660", &iso9660_ops, 0);
     }
 }
 
@@ -219,125 +493,12 @@ bool iso9660_is_initialized(void) {
     return initialized;
 }
 
-static void mount_dir_recursive(const char* mount_point, uint32_t dir_extent, uint32_t dir_size);
-
-void iso9660_mount_to_vfs(const char* mount_point, const char* iso_path) {
-    if (!initialized || !primary_volume) {
-        return;
+int iso9660_mount_to_vfs(const char* mount_point, const char* iso_path) {
+    (void)iso_path;
+    
+    if (!initialized || !iso_data) {
+        return -ENODEV;
     }
-
-    extern int vfs_create(const char* filename, const char* data, size_t size);
-    extern int vfs_mkdir(const char* dirname);
-
-    size_t dir_size;
-    const uint8_t* dir_data = (const uint8_t*)iso9660_find_file(iso_path, &dir_size);
-    if (!dir_data) return;
-
-    char lower_mount_point[256];
-    size_t mp_len = strlen(mount_point);
-    if (mp_len >= sizeof(lower_mount_point)) return;
-    for (size_t i = 0; i <= mp_len; i++) {
-        lower_mount_point[i] = mount_point[i];
-    }
-    to_lowercase(lower_mount_point);
-    vfs_mkdir(lower_mount_point);
-
-    size_t offset = 0;
-    while (offset < dir_size) {
-        iso9660_dir_entry_t* entry = (iso9660_dir_entry_t*)(dir_data + offset);
-        if (entry->length == 0) break;
-
-        char* entry_name = (char*)(entry + 1);
-        uint8_t name_len = entry->name_len;
-
-        if (name_len == 1 && (entry_name[0] == 0 || entry_name[0] == 1)) {
-            offset += entry->length;
-            continue;
-        }
-
-        char normalized[256];
-        normalize_filename(entry_name, name_len, normalized, sizeof(normalized));
-        to_lowercase(normalized);
-
-        char vfs_path[512];
-        size_t idx = 0;
-
-        for (size_t i = 0; lower_mount_point[i] && idx < 510; i++) {
-            vfs_path[idx++] = lower_mount_point[i];
-        }
-        if (idx > 0 && vfs_path[idx-1] != '/') {
-            vfs_path[idx++] = '/';
-        }
-
-        for (size_t i = 0; normalized[i] && idx < 511; i++) {
-            vfs_path[idx++] = normalized[i];
-        }
-        vfs_path[idx] = '\0';
-
-        if (entry->flags & ISO_FLAG_DIRECTORY) {
-            vfs_mkdir(vfs_path);
-            mount_dir_recursive(vfs_path, entry->extent_le, entry->size_le);
-        } else {
-            const uint8_t* file_data = read_block(entry->extent_le);
-            if (file_data && entry->size_le <= MAX_FILE_SIZE) {
-                vfs_create(vfs_path, (const char*)file_data, entry->size_le);
-            }
-        }
-
-        offset += entry->length;
-    }
-}
-
-static void mount_dir_recursive(const char* mount_point, uint32_t dir_extent, uint32_t dir_size) {
-    extern int vfs_create(const char* filename, const char* data, size_t size);
-    extern int vfs_mkdir(const char* dirname);
-
-    const uint8_t* dir_data = read_block(dir_extent);
-    if (!dir_data) return;
-
-    size_t offset = 0;
-    while (offset < dir_size) {
-        iso9660_dir_entry_t* entry = (iso9660_dir_entry_t*)(dir_data + offset);
-
-        if (entry->length == 0) break;
-
-        char* entry_name = (char*)(entry + 1);
-        uint8_t name_len = entry->name_len;
-
-        if (name_len == 1 && (entry_name[0] == 0 || entry_name[0] == 1)) {
-            offset += entry->length;
-            continue;
-        }
-
-        char normalized[256];
-        normalize_filename(entry_name, name_len, normalized, sizeof(normalized));
-        to_lowercase(normalized);
-
-        char vfs_path[512];
-        size_t idx = 0;
-
-        for (size_t i = 0; mount_point[i] && idx < 510; i++) {
-            vfs_path[idx++] = mount_point[i];
-        }
-        if (idx > 0 && vfs_path[idx-1] != '/') {
-            vfs_path[idx++] = '/';
-        }
-
-        for (size_t i = 0; normalized[i] && idx < 511; i++) {
-            vfs_path[idx++] = normalized[i];
-        }
-        vfs_path[idx] = '\0';
-
-        if (entry->flags & ISO_FLAG_DIRECTORY) {
-            vfs_mkdir(vfs_path);
-            mount_dir_recursive(vfs_path, entry->extent_le, entry->size_le);
-        } else {
-            const uint8_t* file_data = read_block(entry->extent_le);
-            if (file_data && entry->size_le <= MAX_FILE_SIZE) {
-                vfs_create(vfs_path, (const char*)file_data, entry->size_le);
-            }
-        }
-
-        offset += entry->length;
-    }
+    
+    return vfs_mount_fs("iso9660", mount_point, "iso0", 0, NULL);
 }

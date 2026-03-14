@@ -2,9 +2,12 @@
 
 #include <core/fs/fat32.h>
 #include <core/fs/block.h>
+#include <core/fs/vfs.h>
 #include <core/kernel/kstd.h>
 #include <log.h>
 #include <core/kernel/mem.h>
+#include <errno.h>
+#include <string.h>
 
 static const vfs_fs_ops_t fat32_ops;
 
@@ -59,7 +62,7 @@ int fat32_mount(vfs_mount_t* mnt, const char* device, void* data) {
     fs_data->bytes_per_cluster = fs_data->bytes_per_sector * fs_data->sectors_per_cluster;
     fs_data->reserved_sectors = le16_to_cpu(bpb->reserved_sectors);
     fs_data->num_fats = bpb->num_fats;
-    fs_data->fat_size = le32_to_cpu(bpb->fat_size_32);
+    fs_data->fat_size = le32_to_cpu(bpb->sectors_per_fat_32);
     fs_data->root_cluster = le32_to_cpu(bpb->root_cluster);
 
     uint32_t total_sectors_16 = le16_to_cpu(bpb->total_sectors_16);
