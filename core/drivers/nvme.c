@@ -13,6 +13,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <string.h>
+#include <core/kernel/kstd.h>
 
 #define NVME_MMIO_BASE   0xFEBF0000ULL
 #define NVME_IRQ_VECTOR  0x41
@@ -45,8 +46,11 @@ static uint16_t command_id     = 0;
 static uint8_t  admin_cq_phase = 1;
 static uint8_t  io_cq_phase    = 1;
 
-static uint32_t nsid        = 1;
-static uint64_t block_count = 0;
+/* Per-namespace context stored in block_device.private_data */
+typedef struct {
+    uint32_t nsid;
+    uint64_t block_count;
+} nvme_ns_ctx_t;
 
 static volatile bool     nvme_io_complete = false;
 static volatile uint16_t nvme_io_result   = 0;
@@ -148,6 +152,15 @@ static int nvme_identify_namespace(uint32_t ns_id, void* data) {
     cmd.nsid  = ns_id;
     cmd.prp1  = virt_to_phys(data);
     cmd.cdw10 = NVME_IDENTIFY_CNS_NAMESPACE;
+    return nvme_submit_admin_command(&cmd);
+}
+
+static int nvme_identify_controller(void* data) {
+    nvme_command_t cmd = {0};
+    cmd.cdw0  = NVME_ADMIN_IDENTIFY;
+    cmd.nsid  = 0;
+    cmd.prp1  = virt_to_phys(data);
+    cmd.cdw10 = NVME_IDENTIFY_CNS_CONTROLLER;
     return nvme_submit_admin_command(&cmd);
 }
 
@@ -316,9 +329,9 @@ static int nvme_submit_io_and_wait(nvme_command_t* cmd) {
 }
 
 static int nvme_read_blocks(struct block_device* dev, uint64_t lba, size_t count, void* buf) {
-    (void)dev;
+    nvme_ns_ctx_t* ctx = (nvme_ns_ctx_t*)dev->private_data;
 
-    if (lba + count > block_count)
+    if (lba + count > ctx->block_count)
         return -1;
 
     while (count > 0) {
@@ -326,7 +339,7 @@ static int nvme_read_blocks(struct block_device* dev, uint64_t lba, size_t count
 
         nvme_command_t cmd = {0};
         cmd.cdw0  = NVME_CMD_READ | ((uint32_t)(command_id++) << 16);
-        cmd.nsid  = nsid;
+        cmd.nsid  = ctx->nsid;
         cmd.prp1  = virt_to_phys(buf);
         cmd.cdw10 = (uint32_t)(lba & 0xFFFFFFFF);
         cmd.cdw11 = (uint32_t)(lba >> 32);
@@ -344,9 +357,9 @@ static int nvme_read_blocks(struct block_device* dev, uint64_t lba, size_t count
 }
 
 static int nvme_write_blocks(struct block_device* dev, uint64_t lba, size_t count, const void* buf) {
-    (void)dev;
+    nvme_ns_ctx_t* ctx = (nvme_ns_ctx_t*)dev->private_data;
 
-    if (lba + count > block_count)
+    if (lba + count > ctx->block_count)
         return -1;
 
     while (count > 0) {
@@ -354,7 +367,7 @@ static int nvme_write_blocks(struct block_device* dev, uint64_t lba, size_t coun
 
         nvme_command_t cmd = {0};
         cmd.cdw0  = NVME_CMD_WRITE | ((uint32_t)(command_id++) << 16);
-        cmd.nsid  = nsid;
+        cmd.nsid  = ctx->nsid;
         cmd.prp1  = virt_to_phys(buf);
         cmd.cdw10 = (uint32_t)(lba & 0xFFFFFFFF);
         cmd.cdw11 = (uint32_t)(lba >> 32);
@@ -407,6 +420,7 @@ void nvme_init(void) {
     if (nvme_setup_admin_queues() < 0) return;
     if (nvme_enable_controller() < 0) return;
 
+    /* Identify Controller — byte 516 is NN (Number of Namespaces, uint32_t). */
     uint8_t* identify_data = alloc_dma(4096);
     if (!identify_data) {
         LOG_ERROR("NVMe: Failed to allocate identify buffer\n");
@@ -414,25 +428,60 @@ void nvme_init(void) {
     }
 
     memset(identify_data, 0, 4096);
-
-    if (nvme_identify_namespace(nsid, identify_data) < 0) {
-        LOG_ERROR("NVMe: Failed to identify namespace\n");
+    if (nvme_identify_controller(identify_data) < 0) {
+        LOG_ERROR("NVMe: Failed to identify controller\n");
         return;
     }
 
-    block_count = *(uint64_t*)identify_data;
-    LOG_DEBUG("NVMe: Namespace size: %llu blocks\n", block_count);
+    uint32_t nn = *(uint32_t*)(identify_data + 516);
+    if (nn == 0) nn = 1; /* spec: must be >= 1 */
+    LOG_DEBUG("NVMe: %u namespace(s) reported\n", nn);
 
     if (nvme_setup_io_queues() < 0) return;
 
-    /* Polling mode: MSI/interrupts require a proper IDT which this kernel does not
-       yet provide. nvme_use_irq stays false; nvme_submit_io_and_wait polls the CQ. */
+    if (pci_found) {
+        idt_install_handler(NVME_IRQ_VECTOR, nvme_irq_handler);
+        uint64_t msi_addr = 0xFEE00000ULL;
+        uint32_t msi_data = NVME_IRQ_VECTOR;
+        pci_enable_msi(pci_bus, pci_dev, pci_func, msi_addr, msi_data);
+        lapic_clear_tpr();
+        nvme_use_irq = true;
+        __asm__ volatile("sti");
+        LOG_DEBUG("NVMe: Interrupt-based I/O enabled (vector=0x%02x)\n", NVME_IRQ_VECTOR);
+    }
 
     block_device_ops_t ops = {
         .read_blocks  = nvme_read_blocks,
         .write_blocks = nvme_write_blocks,
     };
 
-    register_block_device("nvme0n1", 512, block_count, &ops, NULL);
+    /* Enumerate each namespace, register a block device for each active one. */
+    memset(identify_data, 0, 4096);
+    for (uint32_t ns = 1; ns <= nn; ns++) {
+        if (nvme_identify_namespace(ns, identify_data) < 0)
+            continue;
+
+        uint64_t nsze = *(uint64_t*)identify_data;
+        if (nsze == 0)
+            continue;
+
+        nvme_ns_ctx_t* ctx = kmalloc(sizeof(nvme_ns_ctx_t));
+        if (!ctx) {
+            LOG_ERROR("NVMe: Failed to allocate ns context\n");
+            continue;
+        }
+        ctx->nsid        = ns;
+        ctx->block_count = nsze;
+
+        /* Build name: "nvme0n" + ns number */
+        char name[16] = "nvme0n";
+        char num[8];
+        itoa((int)ns, num, 10);
+        strcat_safe(name, num, sizeof(name));
+
+        register_block_device(name, 512, nsze, &ops, ctx);
+        memset(identify_data, 0, 4096);
+    }
+
     LOG_DEBUG("NVMe: Initialization complete\n");
 }

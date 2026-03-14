@@ -36,6 +36,7 @@ typedef struct {
     uint64_t base;
 } __attribute__((packed)) idtr_t;
 
+void idt_init(void);
 void idt_install_handler(uint8_t vector, void* handler);
 
 #endif

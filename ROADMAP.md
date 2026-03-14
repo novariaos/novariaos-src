@@ -36,7 +36,7 @@
     - [x] LBA28 read
     - [x] LBA28 write
 
-- [ ] NVMe Driver
+- [x] NVMe Driver
     - [x] NVMe controller initialization (reset, enable)
     - [x] NVMe admin queue setup and management
     - [x] NVMe I/O queue setup and management
@@ -46,7 +46,7 @@
     - [x] NVMe write operations
     - [x] Interrupt-based I/O (MSI via PCI, vector 0x41)
     - [x] PCI enumeration for NVMe devices
-    - [ ] Multiple namespace support
+    - [x] Multiple namespace support
 
 ## Medium Priority
 - [ ] /dev/tty (WIP: current stage — write only)
