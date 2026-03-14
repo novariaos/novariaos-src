@@ -12,6 +12,24 @@
 #define MAX_TEXT_SIZE     1024
 #define SYSCALL_INTERRUPT 0x80
 
+/* IDT entry (16 bytes) */
+typedef struct __attribute__((packed)) {
+    uint16_t offset_0_15;
+    uint16_t selector;
+    uint8_t  ist;
+    uint8_t  type_attr;
+    uint16_t offset_16_31;
+    uint32_t offset_32_63;
+    uint32_t zero;
+} idt_entry_t;
+
+/* IDT register */
+typedef struct __attribute__((packed)) {
+    uint16_t limit;
+    uint64_t base;
+} idtr_t;
+
+/* Frame pushed by the CPU on interrupt entry */
 typedef struct {
     uint64_t rip;
     uint64_t cs;
@@ -20,22 +38,9 @@ typedef struct {
     uint64_t ss;
 } interrupt_frame_t;
 
-typedef struct {
-    uint16_t offset_0_15;
-    uint16_t selector;
-    uint8_t  ist;
-    uint8_t  type_attr;
-    uint16_t offset_16_31;
-    uint32_t offset_32_63;
-    uint32_t zero;
-} __attribute__((packed)) idt_entry_t;
-
-typedef struct {
-    uint16_t limit;
-    uint64_t base;
-} __attribute__((packed)) idtr_t;
-
 void idt_init(void);
+void idt_load(void);
 void idt_install_handler(uint8_t vector, void* handler);
+void panic_fb_init(uint32_t *addr, uint32_t w, uint32_t h, uint32_t pitch_px);
 
-#endif
+#endif /* ARCH_IDT_H */

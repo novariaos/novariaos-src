@@ -8,7 +8,6 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include <core/arch/idt.h>
 
 #define NVME_ADMIN_QUEUE_SIZE 64
 #define NVME_IO_QUEUE_SIZE    256
@@ -62,7 +61,7 @@ typedef struct {
     uint64_t acq;
     uint32_t cmbloc;
     uint32_t cmbsz;
-    uint32_t reserved1[0x3F0];
+    uint32_t reserved1[0x3B0];
     uint32_t doorbells[];
 } __attribute__((packed)) nvme_controller_regs_t;
 
@@ -113,6 +112,5 @@ typedef struct {
 } __attribute__((packed)) nvme_identify_controller_t;
 
 void nvme_init(void);
-void __attribute__((interrupt, target("general-regs-only"))) nvme_irq_handler(interrupt_frame_t* frame);
 
 #endif
