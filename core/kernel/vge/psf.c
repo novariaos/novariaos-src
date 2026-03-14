@@ -183,16 +183,5 @@ int load_font_from_vfs(const char* path, uint8_t font[256][FONT_HEIGHT]) {
 
     int result = parse_psf_to_font((const uint8_t*)psf_data, file_size, font);
     
-    if (result == 0) {
-        kprint("  Font parsed successfully\n", 2);
-    } else {
-        kprint("  Font parsing failed: ", 12);
-        char err_str[16];
-        err_str[0] = '0' + (-result % 10);
-        err_str[1] = '\0';
-        kprint(err_str, 12);
-        kprint("\n", 12);
-    }
-    
     return result;
 }

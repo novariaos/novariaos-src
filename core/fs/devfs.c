@@ -242,7 +242,6 @@ static vfs_ssize_t dev_full_write(vfs_file_t* file, const void* buf, size_t coun
 
 static vfs_ssize_t dev_urandom_read(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos) {
     (void)file; (void)pos;
-    
     static struct chacha20_rng rng;
     static int initialized = 0;
     
@@ -252,9 +251,11 @@ static vfs_ssize_t dev_urandom_read(vfs_file_t* file, void* buf, size_t count, v
         initialized = 1;
     }
     
-    chacha20_rng_bytes(&rng, buf, count);
+    size_t bytes_to_read = (count > 1024) ? 1024 : count;
     
-    return count;
+    chacha20_rng_bytes(&rng, buf, bytes_to_read);
+    
+    return bytes_to_read;
 }
 
 static vfs_ssize_t dev_urandom_write(vfs_file_t* file, const void* buf, size_t count, vfs_off_t* pos) {

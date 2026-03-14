@@ -74,7 +74,8 @@ static void show_banner(void) {
         "| |\\  | (_) \\ V / (_| | |  | | (_| | |_| |___) |",
         "|_| \\_|\\___/ \\_/ \\__,_|_|  |_|\\__,_|\\___/|____/ "
     };
-
+    
+    fb_set_font_loaded();
     for (int i = 0; i < sizeof(ascii_art) / sizeof(ascii_art[0]); i++) {
         kprint(ascii_art[i], 15);
         kprint("\n", 15);
@@ -84,34 +85,90 @@ static void show_banner(void) {
     kprint("@NovariaOS\n", 9);
 }
 
-static void early_init(void) {
+static void init_video(void) {
     init_fb();
     clear_screen();
-    idt_init();
-    kprint(":: Initializing memory manager...\n", 7);
+    kprint(":: Video subsystem initialized\n", 7);
+}
+
+static void init_serial_port(void) {
     init_serial();
+    kprint(":: Serial port initialized\n", 7);
+}
+
+static void init_memory(void) {
+    kprint(":: Initializing memory manager...\n", 7);
     memory_manager_init();
+    kprint(":: Memory manager ready\n", 7);
 }
 
-static void fs_init(void) {
+static void init_interrupts(void) {
+    idt_init();
+    kprint(":: Interrupt descriptor table initialized\n", 7);
+}
+
+static void init_syslog(void) {
+    syslog_init();
+    kprint(":: System logger initialized\n", 7);
+}
+
+static void init_keyboard(void) {
+    keyboard_init();
+    kprint(":: Keyboard controller initialized\n", 7);
+}
+
+static void init_nvm_storage(void) {
+    nvm_init();
+    kprint(":: Non-volatile memory initialized\n", 7);
+}
+
+static void init_multiprocessing(void) {
+    smp_init(smp_request.response);
+    kprint(":: SMP initialized\n", 7);
+    
+    wq_init();
+    kprint(":: Work queue initialized\n", 7);
+    
+    slab_cpu_init(0);
+    kprint(":: Slab allocator initialized\n", 7);
+    
+    cpu_pool_init(0);
+    kprint(":: CPU pool initialized\n", 7);
+}
+
+static void init_filesystems(void) {
     vfs_init();
+    kprint(":: Virtual filesystem initialized\n", 7);
+    
     block_init();
-
+    kprint(":: Block subsystem initialized\n", 7);
+    
     ide_init();
+    kprint(":: IDE controller initialized\n", 7);
+    
     nvme_init();
+    kprint(":: NVMe controller initialized\n", 7);
+    
     ahci_init();
+    kprint(":: AHCI controller initialized\n", 7);
+    
     fat32_init();
+    kprint(":: FAT32 filesystem initialized\n", 7);
+    
     ext2_init();
-
+    kprint(":: Ext2 filesystem initialized\n", 7);
+    
     block_dev_vfs_init();
+    kprint(":: Block device VFS layer initialized\n", 7);
 }
 
-static void process_boot_modules(void) {
+static void init_boot_modules(void) {
     if (module_request.response == NULL || module_request.response->module_count == 0) {
         LOG_DEBUG("No boot modules found\n");
         return;
     }
 
+    kprint(":: Processing boot modules...\n", 7);
     LOG_DEBUG("Processing %d boot modules...\n", module_request.response->module_count);
 
     int disk_index = 0;
@@ -140,7 +197,9 @@ static void process_boot_modules(void) {
             if (mbr[510] == 0x55 && mbr[511] == 0xAA) {
                 char name[4] = {'h', 'd', 'a' + disk_index, '\0'};
                 ramdisk_register(name, (void*)module->address, module->size);
-                LOG_DEBUG("Found disk image in module %d, registered as %s\n", i, name);
+                kprint(":: Registered boot module as ", 7);
+                kprint(name, 9);
+                kprint("\n", 7);
                 disk_index++;
             }
         }
@@ -149,9 +208,13 @@ static void process_boot_modules(void) {
     if (iso_location) {
         cdrom_set_iso_data(iso_location, iso_size);
         cdrom_init();
+        kprint(":: CD-ROM initialized from boot module\n", 7);
+        
         iso9660_init(iso_location, iso_size);
+        kprint(":: ISO9660 filesystem initialized\n", 7);
+        
         iso9660_mount_to_vfs("/", "/");
-        LOG_DEBUG("ISO9660 filesystem mounted to /\n");
+        kprint(":: Root filesystem mounted from rootfs.img (ISO9660)\n", 7);
 
         vfs_list();
         init_vge_font();
@@ -167,6 +230,8 @@ static void load_kernel_modules(void) {
     int num = vfs_readdir("/boot/modules", entries, 32);
     if (num > 0) {
         char path[256];
+        int loaded = 0;
+        
         for (int i = 0; i < num; i++) {
             const char* name = entries[i].d_name;
             size_t len = strlen(name);
@@ -178,9 +243,21 @@ static void load_kernel_modules(void) {
                 while (*n) *p++ = *n++;
                 *p = '\0';
 
-                kmodule_load(path);
+                if (kmodule_load(path) == 0) {
+                    loaded++;
+                }
             }
         }
+        
+        if (loaded > 0) {
+            kprint(":: Loaded ", 7);
+            char count_str[16];
+            itoa(loaded, count_str, 10);
+            kprint(count_str, 9);
+            kprint(" kernel module(s)\n", 7);
+        }
+    } else {
+        kprint(":: No kernel modules found\n", 7);
     }
 }
 
@@ -193,34 +270,32 @@ void limine_smp_entry(struct limine_mp_info *info) {
 }
 
 void kmain() {
-    early_init();
-
-    syslog_init();
-    keyboard_init();
-    nvm_init();
-
-    idt_init();
-
-    smp_init(smp_request.response);
-    wq_init();
-    slab_cpu_init(0);
-    cpu_pool_init(0);
-
-    fs_init();
-
-    // Process boot modules (mounts rootfs)
-    process_boot_modules();
-
-    // Something like motd
+    // Early initialization
+    init_serial_port();
+    init_video();
+    
+    // Core system initialization
+    init_memory();
+    init_interrupts();
+    init_syslog();
+    init_keyboard();
+    init_nvm_storage();
+    init_multiprocessing();
+    
+    // Filesystem initialization
+    init_filesystems();
+    
+    // Boot modules and root filesystem
+    init_boot_modules();
+    
+    // Display banner
     show_banner();
 
-    // Load kernel modules from filesystem
     load_kernel_modules();
-
-    // Start user interface
+    
     shell_init();
     shell_run();
-
+    
     // Work loop
     while(true) {
         keyboard_getchar();

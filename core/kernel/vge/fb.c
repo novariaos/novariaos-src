@@ -16,7 +16,7 @@ int init_vge_font() {
     system_font_height = 16;
 
     if (!vfs_exists(font_path)) {
-        kprint(":: Font file not found, using built-in 8x8 font.\n", 14);
+        kprint(":: Font file not found, using built-in 8x8 font.\n", 7);
         system_font_height = 8;
         for (int i = 0; i < 256; i++) {
             for (int row = 0; row < 8; row++) {
@@ -28,12 +28,12 @@ int init_vge_font() {
 
     int result = load_font_from_vfs(font_path, system_font);
     if (result == 0) {
-        kprint(":: External font loaded (16px height).\n", 2);
+        kprint(":: External font loaded (16px height).\n", 7);
         system_font_height = 16;
         return 0;
     }
 
-    kprint(":: Font loading failed, using built-in 8x8 font.\n", 14);
+    kprint(":: Font loading failed, using built-in 8x8 font.\n", 7);
     system_font_height = 8;
     for (int i = 0; i < 256; i++) {
         for (int row = 0; row < 8; row++) {

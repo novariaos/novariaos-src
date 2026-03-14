@@ -24,5 +24,6 @@ void draw_line(uint32_t x1, uint32_t y1, uint32_t x2, uint32_t y2, uint32_t colo
 void get_fb_dimensions(uint32_t* width, uint32_t* height, uint32_t* pitch);
 uint32_t* get_framebuffer(void);
 uint32_t get_fb_pitch_pixels(void); 
+void fb_set_font_loaded(void);
 
 #endif // _FB_RENDER_H_
