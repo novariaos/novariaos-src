@@ -146,6 +146,10 @@ void memory_manager_init(void) {
     LOG_TRACE("memory_manager_init: completed\n");
 }
 
+uint64_t get_hhdm_offset(void) {
+    return hhdm_offset;
+}
+
 void* kmalloc(size_t size) {
     if (size == 0) return NULL;
 
@@ -414,8 +418,4 @@ void check_memory_leaks(void) {
     }
 
     kprint("+-----------------------------+\n", 7);
-}
-
-uint64_t get_hhdm_offset(void) {
-    return hhdm_offset;
 }

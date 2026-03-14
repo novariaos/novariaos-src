@@ -26,6 +26,7 @@
 #include <stdbool.h>
 #include <limine.h>
 #include <core/kernel/elf.h>
+#include <core/arch/idt.h>
 #include <core/arch/smp.h>
 #include <core/arch/work_queue.h>
 #include <core/kernel/mem/slab.h>
@@ -197,6 +198,8 @@ void kmain() {
     syslog_init();
     keyboard_init();
     nvm_init();
+
+    idt_init();
 
     smp_init(smp_request.response);
     wq_init();
