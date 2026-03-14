@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include <log.h>
+#include <core/arch/idt.h>
 #include <core/kernel/kstd.h>
 #include <core/kernel/vge/fb_render.h>
 #include <core/kernel/vge/palette.h>
@@ -206,6 +207,11 @@ void init_fb(void) {
     fb_info.clear_area_start = fb_info.fb_addr +
                                (fb_info.remaining_bytes / sizeof(uint32_t));
     fb_info.clear_words = fb_info.scroll_bytes / sizeof(uint32_t);
+
+    panic_fb_init(fb_info.fb_addr,
+                  (uint32_t)fb_info.width,
+                  (uint32_t)fb_info.height,
+                  (uint32_t)fb_info.pitch_pixels);
 
     fb_info.initialized = true;
 }

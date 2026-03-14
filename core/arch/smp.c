@@ -1,4 +1,5 @@
 #include <core/arch/smp.h>
+#include <core/arch/idt.h>
 #include <core/arch/work_queue.h>
 #include <core/kernel/mem.h>
 #include <core/kernel/mem/slab.h>
@@ -52,6 +53,8 @@ void smp_halt_all(void) {
 }
 
 static void ap_entry(struct limine_mp_info* info) {
+    idt_load();
+
     cpu_info_t* cpu = (cpu_info_t*)info->extra_argument;
     cpu->state      = CPU_STATE_ONLINE;
     cpu->ready      = 1;
