@@ -13,6 +13,7 @@
 #include <core/arch/work_queue.h>
 #include <core/arch/smp.h>
 #include <core/kernel/mem/slab.h>
+#include <core/kernel/tty.h>
 
 #define MAX_COMMAND_LENGTH 256
 #define MAX_PATH_LENGTH 256
@@ -423,7 +424,7 @@ static void execute_command(const char* command) {
     } else if (strcmp(argv[0], "memtest") == 0) {
         memory_test();
     } else if (strcmp(argv[0], "clear") == 0) {
-        clear_screen();
+        tty_clear();
     } else if (strcmp(argv[0], "pwd") == 0) {
         kprint(current_working_directory, 11);
         kprint("\n", 7);

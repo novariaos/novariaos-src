@@ -4,6 +4,7 @@
 #include <core/arch/idt.h>
 #include <core/kernel/kstd.h>
 #include <core/kernel/vge/fb_render.h>
+#include <core/kernel/tty.h>
 #include <core/kernel/vge/palette.h>
 #include <limine.h>
 #include <stdint.h>
@@ -179,6 +180,11 @@ const uint8_t builtin_font[128][8] = {
     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 };
 
+static tty_driver_t vge_tty_driver = {
+    .puts = vgaprint,
+    .clear = clear_screen,
+};
+
 void init_fb(void) {
     if (fb_request.response == NULL ||
         fb_request.response->framebuffer_count == 0) {
@@ -217,7 +223,7 @@ void init_fb(void) {
 
     fb_info.initialized = true;
     
-    clear_screen();
+    tty_register_driver(&vge_tty_driver);
     vgaprint(":: Video subsystem initialized\n", 7);
 }
 

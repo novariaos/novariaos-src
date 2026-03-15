@@ -9,6 +9,7 @@
 
 int system_font_height = 16;
 uint8_t system_font[256][FONT_HEIGHT];
+
 int init_vge_font() {
     const char* font_path = "/usr/share/fonts/general.psf";
 

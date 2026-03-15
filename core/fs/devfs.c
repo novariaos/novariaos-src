@@ -4,6 +4,7 @@
 #include <core/arch/entropy.h>
 #include <core/kernel/kstd.h>
 #include <core/kernel/mem.h>
+#include <core/kernel/tty.h>
 #include <core/fs/vfs.h>
 #include <stdbool.h>
 #include <string.h>
@@ -276,7 +277,7 @@ static vfs_ssize_t dev_tty_read(vfs_file_t* file, void* buf, size_t count, vfs_o
 
 static vfs_ssize_t dev_tty_write(vfs_file_t* file, const void* buf, size_t count, vfs_off_t* pos) {
     (void)file; (void)pos;
-    kprint((const char*)buf, 7);
+    tty_puts((const char*)buf);
     return count;
 }
 

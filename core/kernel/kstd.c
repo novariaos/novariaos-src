@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include <core/kernel/kstd.h>
-#include <core/kernel/vge/fb_render.h>
+#include <core/kernel/tty.h>
 #include <stdint.h>
 
 void reverse(char* str, int length) {
@@ -225,5 +225,40 @@ int memcmp(const void* s1, const void* s2, size_t n) {
 }
 
 void kprint(const char *str, int color) {
-    vgaprint(str, color);
+    char esc_buf[16];
+    
+    int fg = color & 0x0F;
+    int bg = (color >> 4) & 0x0F;
+    
+    char* ptr = esc_buf;
+    *ptr++ = '\033';
+    *ptr++ = '[';
+    
+    if (fg < 8) {
+        *ptr++ = '3';
+        *ptr++ = '0' + fg;
+    } else {
+        *ptr++ = '9';
+        *ptr++ = '0' + (fg - 8);
+    }
+    
+    *ptr++ = ';';
+    
+    if (bg < 8) {
+        *ptr++ = '4';
+        *ptr++ = '0' + bg;
+    } else {
+        *ptr++ = '1';
+        *ptr++ = '0';
+        *ptr++ = '0' + (bg - 8);
+    }
+    
+    *ptr++ = 'm';
+    *ptr = '\0';
+    
+    tty_puts(esc_buf);
+
+    tty_puts(str);
+    
+    tty_puts("\033[0m");
 }
