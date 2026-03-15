@@ -132,7 +132,7 @@ void palette_init(void) {
     if (!data || file_size == 0)
         return;
 
-    kprint("Loading palette: ", 7);
+    kprint(":: Loading palette: ", 7);
     kprint(PALETTE_PATH, 7);
     kprint("\n", 7);
 

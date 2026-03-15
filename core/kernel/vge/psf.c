@@ -140,7 +140,7 @@ int parse_psf_to_font(const uint8_t* psf_data, size_t psf_size, uint8_t font[256
                 }
             }
             
-            kprint("PSF1 font loaded\n", 7);
+            kprint(":: PSF1 font loaded\n", 7);
             return 0;
         }
     }
@@ -150,7 +150,7 @@ int parse_psf_to_font(const uint8_t* psf_data, size_t psf_size, uint8_t font[256
 }
 
 int load_font_from_vfs(const char* path, uint8_t font[256][FONT_HEIGHT]) {
-    kprint("Loading font: ", 7);
+    kprint(":: Loading font: ", 7);
     kprint(path, 7);
     kprint("\n", 7);
     
