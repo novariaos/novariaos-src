@@ -2,7 +2,36 @@
 
 # High Priority
 
-## 1. DMA subsystem (core implementation)
+## NVMe Driver
+    - [x] NVMe controller initialization (reset, enable)
+    - [x] NVMe admin queue setup and management
+    - [x] NVMe I/O queue setup and management
+    - [x] MMIO register access functions
+    - [x] Identify namespace command
+    - [x] NVMe read operations (polling mode)
+    - [ ] NVMe write operations
+    - [ ] Interrupt-based I/O (currently uses polling)
+    - [ ] Multiple namespace support
+    - [ ] PCI enumeration for NVMe devices
+
+## AHCI (SATA) Driver
+    - [x] PCI bus scan for AHCI controller (class 01h/06h)
+    - [x] ABAR (BAR5) discovery and MMIO mapping
+    - [x] GHC AHCI enable and controller version detection
+    - [x] Port enumeration and device type detection
+    - [x] Command list and FIS receive buffer allocation (port rebase)
+    - [x] IDENTIFY DEVICE command (LBA48 and LBA28 sector count)
+    - [x] DMA read operations (READ DMA EXT, LBA48)
+    - [x] DMA write operations (WRITE DMA EXT, LBA48)
+    - [x] Block device registration (sda, sdb, ...)
+    - [ ] Interrupt-based I/O (currently uses polling)
+    - [ ] Hot-plug support (port change detection)
+    - [ ] ATAPI device support
+    - [ ] NCQ (Native Command Queuing)
+    - [ ] Port multiplier support
+    - [ ] Error recovery and port reset
+
+## DMA subsystem (core implementation)
    - [ ] Design DMA structures in kernel
         - dma_page struct (phys_addr, size, refcount, dirty, backing_file, file_offset)
         - dma_manager (array/list of pages, free list)
@@ -24,12 +53,12 @@
         - Read/write to/from files
         - Mark dirty and sync
 
-## 2. NVM extension (bit shifts)
+## NVM extension (bit shifts)
    - [ ] Add SHL (0x70) instruction to interpreter
    - [ ] Add SHR (0x71) instruction to interpreter
    - [ ] Write test programs to verify shifts
 
-## 3. Basic system calls (export minimal DMA)
+## Basic system calls (export minimal DMA)
    - [ ] DMA_ALLOC (0x0F) — wrapper around dma_alloc_page
    - [ ] DMA_FREE (0x10) — wrapper around dma_free_page
    - [ ] Rework READ (0x03) to use DMA pages
@@ -40,7 +69,7 @@
 ---
 
 # Medium Priority
-## 4. Advanced DMA features
+## Advanced DMA features
    - [ ] Implement mapping to NVM address space
         - int dma_map_to_nvm(dma_page_t* page, uint32_t nvm_addr, struct nvm_process* proc)
         - int dma_unmap_from_nvm(uint32_t nvm_addr, struct nvm_process* proc)
@@ -48,16 +77,16 @@
    - [ ] Implement partial sync
         - int dma_sync_range(dma_page_t* page, size_t offset, size_t size)
 
-## 5. Advanced DMA system calls
+## Advanced DMA system calls
    - [ ] DMA_MAP (0x15) — wrapper around dma_map_to_nvm
    - [ ] DMA_UNMAP (0x16) — wrapper around dma_unmap_from_nvm
    - [ ] DMA_SYNC (0x11) — wrapper around dma_sync_page
    - [ ] DMA_MSYNC (0x17) — wrapper around dma_sync_range
 
-## 6. Finish /dev/tty
+## Finish /dev/tty
   - [ ] Add write option 
 
-## 7. Clocks!
+## Clocks!
    - [ ] Initialize APIC
    - [ ] Program APIC timer
    - [ ] Implement /dev/time (seconds since epoch)
@@ -68,7 +97,7 @@
 
 # Low Priority
 
-## 8. Network stack
+## Network stack
    - [ ] Study IwIP integration requirements
    - [ ] Implement sys_arch layer for Novaria (threads/semaphores if needed)
    - [ ] Write RTL8139 driver
@@ -81,5 +110,5 @@
         - ethernetif_output (IwIP -> packet)
    - [ ] Test ARP, ICMP (ping), UDP
 
-## 9. Extra syscall cleanup
+## Extra syscall cleanup
    - [ ] Audit other syscalls for garbage
