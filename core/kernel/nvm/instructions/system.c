@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include <core/kernel/nvm/instructions.h>
 #include <core/kernel/nvm/syscall.h>
 #include <log.h>

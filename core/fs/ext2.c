@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include <core/fs/ext2.h>
 #include <core/fs/vfs.h>
 #include <core/fs/block.h>

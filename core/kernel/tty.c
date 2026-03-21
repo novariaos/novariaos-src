@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include <core/kernel/tty.h>
 
 void tty_register_driver(tty_driver_t* driver) {

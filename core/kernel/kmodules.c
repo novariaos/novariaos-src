@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include <core/kernel/elf.h>
 #include <core/kernel/mem.h>
 #include <core/kernel/kstd.h>

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include <core/kernel/mem/allocator.h>
 #include <core/kernel/mem/buddy.h>
 #include <core/kernel/mem/slab.h>
