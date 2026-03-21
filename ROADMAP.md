@@ -63,7 +63,7 @@
 - [ ] DMA_FREE (0x10) — wrapper around `dma_free_page`
 - [ ] Rework READ (0x03) to use DMA pages
 - [ ] Rework WRITE (0x04) to use DMA pages
-- [ ] Remove PRINT (0x0E)
+- [x] Remove PRINT (0x0E)
 - [ ] Renumber syscalls if needed
 
 ---
@@ -85,14 +85,15 @@
 - [ ] DMA_MSYNC (0x17) — wrapper around `dma_sync_range`
 
 ## Finish /dev/tty
-- [ ] Add write option
+- [x] Add write option
+- [ ] Add read option
 
 ## Clocks!
+- [ ] Initialize RTC(Real Time Clock)
+- [X] Implement `/dev/time`
+     - [X] DevFS integration
 - [ ] Initialize APIC
 - [ ] Program APIC timer
-- [ ] Implement `/dev/time` (seconds since epoch)
-     - Internal function: `uint64_t get_unix_time(void)`
-     - DevFS integration
 - [ ] Implement `/proc/uptime` (seconds since boot)
      - Internal function: `uint64_t get_uptime(void)`
 

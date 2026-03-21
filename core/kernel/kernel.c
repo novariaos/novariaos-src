@@ -33,6 +33,7 @@
 #include <core/kernel/mem/cpu_pool.h>
 #include <core/arch/panic.h>
 #include <core/arch/idt.h>
+#include <core/arch/rtc.h>
 
 // Limine requests
 static volatile struct limine_module_request module_request = {
@@ -282,6 +283,7 @@ void kmain() {
     init_keyboard();
     init_nvm();
     init_multiprocessing();
+    init_timer_subsystem();
     
     // Filesystem initialization
     init_filesystems();
@@ -293,7 +295,7 @@ void kmain() {
     show_banner();
 
     load_kernel_modules();
-    
+
     shell_init();
     shell_run();
     

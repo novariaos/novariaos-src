@@ -2,6 +2,7 @@
 
 #include <core/crypto/chacha20_rng.h>
 #include <core/arch/entropy.h>
+#include <core/drivers/timer.h>
 #include <core/kernel/kstd.h>
 #include <core/kernel/mem.h>
 #include <core/kernel/tty.h>
@@ -281,6 +282,27 @@ static vfs_ssize_t dev_tty_write(vfs_file_t* file, const void* buf, size_t count
     return count;
 }
 
+static vfs_ssize_t dev_time_read(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos) {
+    char time_str[128];
+    size_t len;
+    
+    if (*pos > 0) {
+        return 0;
+    }
+    
+    timer_get_readable(time_str, sizeof(time_str));
+    len = strlen(time_str);
+    
+    if (count > len) {
+        count = len;
+    }
+    
+    memcpy(buf, time_str, count);
+    *pos = count;
+    
+    return count;
+}
+
 void devfs_register_device(const char* name, vfs_dev_read_t read_fn,
                            vfs_dev_write_t write_fn, void* data) {
     for (int i = 0; i < MAX_DEVICES; i++) {
@@ -314,6 +336,7 @@ void devfs_init(void) {
     devfs_register_device("full", dev_full_read, dev_full_write, NULL);
     devfs_register_device("urandom", dev_urandom_read, dev_urandom_write, NULL);
     devfs_register_device("tty", dev_tty_read, dev_tty_write, NULL);
+    devfs_register_device("time", dev_time_read, NULL, NULL);
     devfs_register_device("stdin", NULL, NULL, NULL);
     devfs_register_device("stdout", NULL, NULL, NULL);
     devfs_register_device("stderr", NULL, NULL, NULL);
