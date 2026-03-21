@@ -696,7 +696,7 @@ void shell_run(void) {
                     should_delay_prompt = 0;
                 }
             }
-            kprint("(host)-[", 7);
+            kprint("[host:", 7);
             kprint(current_working_directory, 2);
             kprint("] ", 7);
             kprint("# ", 2);
