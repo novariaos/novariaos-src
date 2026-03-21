@@ -8,22 +8,23 @@
 #include <stdbool.h>
 
 static uint32_t vga_palette[16] = {
-    0x00101010, // 0  black
-    0x003b5bdb, // 1  blue
-    0x0031a354, // 2  green
-    0x0030a0a0, // 3  cyan
-    0x00c34043, // 4  red
-    0x007b3fb2, // 5  magenta
-    0x00b58900, // 6  yellow
-    0x00c0c0c0, // 7  white
-    0x00505050, // 8  bright black
-    0x006a8cff, // 9  bright blue
-    0x0057d18b, // 10 bright green
-    0x005fd7d7, // 11 bright cyan
-    0x00ff6b6b, // 12 bright red
-    0x00c77dff, // 13 bright magenta
-    0x00ffd866, // 14 bright yellow
-    0x00f2f2f2, // 15 bright white
+    0x00000000, // 0  black
+    0x00aa0000, // 1  blue
+    0x0000aa00, // 2  green
+    0x00aa5500, // 3  cyan
+    0x00aa0000, // 4  red
+    0x00aa00aa, // 5  magenta
+    0x00ffaa00, // 6  yellow
+    0x00aaaaaa, // 7  light gray
+
+    0x00555555, // 8  bright black
+    0x005555ff, // 9  bright blue
+    0x0055ff55, // 10 bright green
+    0x00ffff55, // 11 bright cyan
+    0x00ff5555, // 12 bright red
+    0x00ff55ff, // 13 bright magenta
+    0x00ffff55, // 14 bright yellow
+    0x00ffffff, // 15 bright white
 };
 
 static int hex_digit(char c) {
