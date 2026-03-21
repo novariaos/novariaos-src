@@ -337,8 +337,8 @@ const char* vfs_read(const char* filename, size_t* size) {
 }
 
 int vfs_open(const char* filename, int flags) {
+    // 1. Сначала проверяем legacy files[] (для обратной совместимости)
     vfs_file_t* file = NULL;
-    
     for (int i = 0; i < MAX_FILES; i++) {
         if (files[i].used && strcmp(files[i].name, filename) == 0) {
             file = &files[i];
@@ -346,43 +346,74 @@ int vfs_open(const char* filename, int flags) {
         }
     }
     
-    if (!file) {
-        const char* rel_path;
-        vfs_mount_t* mnt = vfs_find_mount(filename, &rel_path);
-        if (mnt && mnt->fs && mnt->fs->ops && mnt->fs->ops->stat) {
-            vfs_stat_t stat;
-            if (mnt->fs->ops->stat(mnt, rel_path, &stat) == 0) {
-                for (int i = 0; i < MAX_FILES; i++) {
-                    if (!files[i].used) {
-                        strcpy(files[i].name, filename);
-                        files[i].size = stat.st_size;
-                        files[i].used = true;
-                        files[i].type = VFS_TYPE_FILE;
-                        files[i].mount = (void*)mnt;
-                        files[i].fs_private = NULL;
-                        file = &files[i];
-                        break;
-                    }
-                }
-            }
-        }
-    }
-    
-    if (!file && (flags & VFS_CREAT)) {
-        for (int i = 0; i < MAX_FILES; i++) {
-            if (!files[i].used) {
-                strcpy(files[i].name, filename);
-                files[i].size = 0;
-                files[i].used = true;
-                files[i].type = VFS_TYPE_FILE;
-                file = &files[i];
+    // 2. Если нашли в legacy, используем старую логику
+    if (file) {
+        int handle_idx = -1;
+        for (int i = 0; i < MAX_HANDLES; i++) {
+            if (!handles[i].used) {
+                handle_idx = i;
                 break;
             }
         }
+        if (handle_idx == -1) return -EMFILE;
+        
+        int fd = allocate_fd();
+        if (fd == -1) return -EMFILE;
+        
+        handles[handle_idx].used = true;
+        handles[handle_idx].fd = fd;
+        handles[handle_idx].file = file;
+        handles[handle_idx].position = 0;
+        handles[handle_idx].flags = flags;
+        
+        return fd;
     }
     
-    if (!file) return -1;
+    // 3. Ищем в смонтированных ФС
+    const char* rel_path;
+    vfs_mount_t* mnt = vfs_find_mount(filename, &rel_path);
+    if (!mnt || !mnt->fs || !mnt->fs->ops) {
+        return -ENOENT;
+    }
     
+    // 4. Проверяем существование через stat
+    vfs_stat_t stat;
+    if (mnt->fs->ops->stat && mnt->fs->ops->stat(mnt, rel_path, &stat) != 0) {
+        return -ENOENT;
+    }
+    
+    // 5. Выделяем handle в file_handles[] (НЕ в handles[]!)
+    int fh_idx = -1;
+    for (int i = 0; i < MAX_HANDLES; i++) {
+        if (!file_handles[i].used) {
+            fh_idx = i;
+            break;
+        }
+    }
+    if (fh_idx == -1) return -EMFILE;
+    
+    // 6. Выделяем fd
+    int fd = allocate_fd();
+    if (fd == -1) return -EMFILE;
+    
+    // 7. Инициализируем file_handle
+    file_handles[fh_idx].used = true;
+    file_handles[fh_idx].fd = fd;
+    file_handles[fh_idx].mount = mnt;
+    file_handles[fh_idx].position = 0;
+    file_handles[fh_idx].flags = flags;
+    strcpy(file_handles[fh_idx].path, rel_path);
+    
+    // 8. Вызываем open у ФС (если есть)
+    if (mnt->fs->ops->open) {
+        int ret = mnt->fs->ops->open(mnt, rel_path, flags, &file_handles[fh_idx]);
+        if (ret < 0) {
+            file_handles[fh_idx].used = false;
+            return ret;
+        }
+    }
+    
+    // 9. Создаем запись в handles[] для быстрого доступа по fd
     int handle_idx = -1;
     for (int i = 0; i < MAX_HANDLES; i++) {
         if (!handles[i].used) {
@@ -391,18 +422,22 @@ int vfs_open(const char* filename, int flags) {
         }
     }
     
-    if (handle_idx == -1) return -2;
-    
-    int fd = allocate_fd();
-    if (fd == -1) return -3;
+    if (handle_idx == -1) {
+        // Если нет места, нужно закрыть file_handle
+        if (mnt->fs->ops->close) {
+            mnt->fs->ops->close(mnt, &file_handles[fh_idx]);
+        }
+        file_handles[fh_idx].used = false;
+        return -EMFILE;
+    }
     
     handles[handle_idx].used = true;
     handles[handle_idx].fd = fd;
-    handles[handle_idx].file = file;
+    handles[handle_idx].file = NULL;  // Не используем legacy file
     handles[handle_idx].position = 0;
     handles[handle_idx].flags = flags;
-    handles[handle_idx].fs_private = file->fs_private;
-    handles[handle_idx].mount = file->mount;
+    handles[handle_idx].fs_private = &file_handles[fh_idx];  // Ссылка на file_handle
+    handles[handle_idx].mount = mnt;
     
     return fd;
 }
@@ -412,76 +447,39 @@ vfs_ssize_t vfs_readfd(int fd, void* buf, size_t count) {
     if (!handle) return -EBADF;
     if (!(handle->flags & VFS_READ)) return -EACCES;
     
-    vfs_file_t* file = handle->file;
-    if (!file) return -EBADF;
-    
-    if (fd == 0 || fd == DEV_STDIN_FD) {
-        return 0;
-    }
-    
-    if (file->type == VFS_TYPE_DEVICE) {
-        if (!file->ops.read) return -EACCES;
-        return file->ops.read(file, buf, count, &handle->position);
-    }
-    
-    if (file->mount) {
-        vfs_mount_t* mnt = (vfs_mount_t*)file->mount;
-        if (mnt && mnt->fs && mnt->fs->ops && mnt->fs->ops->read) {
-            vfs_file_handle_t* fh = NULL;
-            for (int i = 0; i < MAX_HANDLES; i++) {
-                if (file_handles[i].used && file_handles[i].fd == fd) {
-                    fh = &file_handles[i];
-                    break;
-                }
-            }
-            
-            if (!fh) {
-                for (int i = 0; i < MAX_HANDLES; i++) {
-                    if (!file_handles[i].used) {
-                        fh = &file_handles[i];
-                        fh->used = true;
-                        fh->fd = fd;
-                        fh->mount = mnt;
-                        fh->position = handle->position;
-                        fh->flags = handle->flags;
-                        
-                        const char* rel_path;
-                        vfs_find_mount(file->name, &rel_path);
-                        strcpy(fh->path, rel_path);
-                        
-                        if (mnt->fs->ops->open) {
-                            int ret = mnt->fs->ops->open(mnt, rel_path, handle->flags, fh);
-                            if (ret < 0) {
-                                fh->used = false;
-                                return ret;
-                            }
-                        }
-                        break;
-                    }
-                }
-            }
-            
-            if (fh) {
-                fh->position = handle->position;
-                vfs_ssize_t result = mnt->fs->ops->read(mnt, fh, buf, count);
-                if (result > 0) {
-                    handle->position += result;
-                }
-                return result;
-            }
+    // Сначала проверяем legacy files
+    if (handle->file) {
+        vfs_file_t* file = handle->file;
+        if (file->type == VFS_TYPE_DEVICE && file->ops.read) {
+            return file->ops.read(file, buf, count, &handle->position);
         }
-        return -EIO;
+        // Legacy file read logic
+        if (handle->position >= file->size) return 0;
+        size_t remaining = file->size - handle->position;
+        size_t to_read = count < remaining ? count : remaining;
+        memcpy(buf, file->data + handle->position, to_read);
+        handle->position += to_read;
+        return to_read;
     }
     
-    if (handle->position >= file->size) return 0;
+    // Для mounted FS
+    if (handle->mount && handle->mount->fs && handle->mount->fs->ops) {
+        vfs_file_handle_t* fh = (vfs_file_handle_t*)handle->fs_private;
+        if (!fh || !fh->used) return -EBADF;
+        
+        fh->position = handle->position;  // Синхронизируем позицию
+        
+        if (handle->mount->fs->ops->read) {
+            vfs_ssize_t result = handle->mount->fs->ops->read(handle->mount, fh, buf, count);
+            if (result > 0) {
+                handle->position += result;
+                fh->position = handle->position;
+            }
+            return result;
+        }
+    }
     
-    size_t remaining = file->size - handle->position;
-    size_t to_read = count < remaining ? count : remaining;
-    
-    memcpy(buf, file->data + handle->position, to_read);
-    handle->position += to_read;
-    
-    return to_read;
+    return -EIO;
 }
 
 vfs_ssize_t vfs_writefd(int fd, const void* buf, size_t count) {
@@ -489,35 +487,48 @@ vfs_ssize_t vfs_writefd(int fd, const void* buf, size_t count) {
     if (!handle) return -EBADF;
     if (!(handle->flags & VFS_WRITE)) return -EACCES;
     
-    vfs_file_t* file = handle->file;
-    
-    if (fd == 1 || fd == 2 || fd == DEV_STDOUT_FD || fd == DEV_STDERR_FD) {
+    // stdout/stderr shortcut
+    if (fd == 1 || fd == 2) {
         return count;
     }
     
-    if (!file) return -EBADF;
-    
-    if (file->type == VFS_TYPE_DEVICE) {
-        if (!file->ops.write) {
-            return -EACCES;
+    // Legacy files
+    if (handle->file) {
+        vfs_file_t* file = handle->file;
+        if (file->type == VFS_TYPE_DEVICE && file->ops.write) {
+            return file->ops.write(file, buf, count, &handle->position);
         }
-        return file->ops.write(file, buf, count, &handle->position);
+        // Legacy file write logic
+        if (handle->position + count > MAX_FILE_SIZE) {
+            count = MAX_FILE_SIZE - handle->position;
+        }
+        if (count == 0) return -ENOSPC;
+        memcpy(file->data + handle->position, buf, count);
+        handle->position += count;
+        if (handle->position > file->size) {
+            file->size = handle->position;
+        }
+        return count;
     }
     
-    if (handle->position + count > MAX_FILE_SIZE) {
-        count = MAX_FILE_SIZE - handle->position;
+    // Mounted FS
+    if (handle->mount && handle->mount->fs && handle->mount->fs->ops) {
+        vfs_file_handle_t* fh = (vfs_file_handle_t*)handle->fs_private;
+        if (!fh || !fh->used) return -EBADF;
+        
+        fh->position = handle->position;
+        
+        if (handle->mount->fs->ops->write) {
+            vfs_ssize_t result = handle->mount->fs->ops->write(handle->mount, fh, buf, count);
+            if (result > 0) {
+                handle->position += result;
+                fh->position = handle->position;
+            }
+            return result;
+        }
     }
     
-    if (count == 0) return -ENOSPC;
-    
-    memcpy(file->data + handle->position, buf, count);
-    handle->position += count;
-    
-    if (handle->position > file->size) {
-        file->size = handle->position;
-    }
-    
-    return count;
+    return -EIO;
 }
 
 int vfs_close(int fd) {
@@ -525,11 +536,21 @@ int vfs_close(int fd) {
     
     for (int i = 0; i < MAX_HANDLES; i++) {
         if (handles[i].used && handles[i].fd == fd) {
+            // Если это mounted FS, вызываем close
+            if (handles[i].mount && handles[i].mount->fs && 
+                handles[i].mount->fs->ops && handles[i].mount->fs->ops->close) {
+                vfs_file_handle_t* fh = (vfs_file_handle_t*)handles[i].fs_private;
+                if (fh && fh->used) {
+                    handles[i].mount->fs->ops->close(handles[i].mount, fh);
+                    fh->used = false;
+                }
+            }
+            
             handles[i].used = false;
             handles[i].fd = -1;
             handles[i].file = NULL;
-            handles[i].position = 0;
-            handles[i].flags = 0;
+            handles[i].fs_private = NULL;
+            handles[i].mount = NULL;
             return 0;
         }
     }

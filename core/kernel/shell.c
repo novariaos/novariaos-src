@@ -117,23 +117,19 @@ static void cmd_cat(const char* args) {
         strcat(full_path, path);
     }
 
-    // Try mounted filesystem first
     const char* rel = NULL;
     vfs_mount_t* mnt = vfs_find_mount(full_path, &rel);
     if (mnt && mnt->fs && mnt->fs->ops) {
         const vfs_fs_ops_t* ops = mnt->fs->ops;
-        char rel_path[MAX_PATH_LENGTH];
-        rel_path[0] = '/';
-        strcpy_safe(rel_path + 1, rel, MAX_PATH_LENGTH - 1);
-
+        
         vfs_stat_t st;
-        int rc = ops->stat ? ops->stat(mnt, rel_path, &st) : -1;
+        int rc = ops->stat ? ops->stat(mnt, rel, &st) : -1;
         if (rc == 0 && (st.st_mode & 0xF000) != 0x4000) { // not a dir
             vfs_file_handle_t h;
             memset(&h, 0, sizeof(h));
             h.position = 0;
             h.flags = VFS_READ;
-            rc = ops->open ? ops->open(mnt, rel_path, VFS_READ, &h) : -1;
+            rc = ops->open ? ops->open(mnt, rel, VFS_READ, &h) : -1;
             if (rc == 0) {
                 char buf[256];
                 vfs_ssize_t n;
@@ -186,7 +182,6 @@ static void cmd_ls(const char* args) {
     if (flen > 1 && full_path[flen-1] == '/')
         full_path[--flen] = '\0';
 
-    // Try mounted filesystem first
     vfs_dirent_t* entries = kmalloc(32 * sizeof(vfs_dirent_t));
     if (!entries) { 
         kprint("ls: out of memory\n", 7); 
@@ -311,16 +306,13 @@ static void cmd_echo(int argc, char* argv[]) {
     if (mnt && mnt->fs && mnt->fs->ops && mnt->fs->ops->open &&
         mnt->fs->ops->write && mnt->fs->ops->close) {
         const vfs_fs_ops_t* ops = mnt->fs->ops;
-        char rel_path[MAX_PATH_LENGTH];
-        rel_path[0] = '/';
-        strcpy_safe(rel_path + 1, rel, MAX_PATH_LENGTH - 1);
 
         int flags = VFS_WRITE | VFS_CREAT | (append ? VFS_APPEND : VFS_TRUNC);
         vfs_file_handle_t h;
         memset(&h, 0, sizeof(h));
         h.flags = flags;
 
-        int rc = ops->open(mnt, rel_path, flags, &h);
+        int rc = ops->open(mnt, rel, flags, &h);
         if (rc != 0) {
             kprint("echo: open failed (", 7);
             char eb[12]; itoa(-rc, eb, 10);
@@ -328,7 +320,7 @@ static void cmd_echo(int argc, char* argv[]) {
             kprint(") fs=", 7);
             kprint(mnt->fs->name, 15);
             kprint(" path=", 7);
-            kprint(rel_path, 15);
+            kprint(rel, 15);
             kprint("\n", 7);
             return;
         }

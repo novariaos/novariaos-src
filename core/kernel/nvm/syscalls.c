@@ -7,6 +7,7 @@
 #include <core/kernel/nvm/syscall.h>
 #include <core/kernel/kstd.h>
 #include <core/fs/procfs.h>
+#include <core/kernel/tty.h>
 
 typedef struct {
     uint16_t recipient;
@@ -31,7 +32,6 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
             proc->active = false;
             procfs_unregister(proc->pid);
             if (proc->bytecode) {
-                // kfree(proc->bytecode);
                 proc->bytecode = NULL;
             }
             if(proc->sp > 0) proc->sp--;
@@ -349,8 +349,8 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
                 result = -1;
             } else if (fd == 1 || fd == 2) {
                 char ch = (char)(byte_val & 0xFF);
-                char str[2] = {ch, '\0'};
-                kprint(str, 15);
+                char buf[2] = {ch, '\0'};
+                tty_puts(buf);
                 result = 1;
             } else {
                 char ch = (char)(byte_val & 0xFF);
@@ -510,10 +510,19 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
                 break;
             }
 
-            uint8_t val = proc->stack[proc->sp - 1] & 0xFF;
-            char print_char[2] = {(char)val, 0};
-            kprint(print_char, 15);
+            tty_puts("[DEPRECATED] SYS_PRINT is deprecated, killed. Use /dev/tty instead of SYS_PRINT\n");
+            
             proc->sp -= 1;
+            
+            proc->exit_code = -1;
+            proc->active = false;
+            procfs_unregister(proc->pid);
+            
+            if (proc->bytecode) {
+                proc->bytecode = NULL;
+            }
+            
+            result = -1;
             break;
         }
 

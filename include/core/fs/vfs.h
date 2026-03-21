@@ -49,6 +49,7 @@
 #define ENODEV  19
 #define EISDIR  21
 #define EIO     5
+#define EMFILE  24
 
 // File type bits for st_mode
 #define VFS_S_IFMT   0xF000
@@ -127,7 +128,7 @@ typedef struct {
     size_t position;
     int flags;
     void* fs_private;
-    void* mount;
+    vfs_mount_t* mount;
 } vfs_handle_t;
 
 // Filesystem operations interface
