@@ -89,7 +89,7 @@
 - [ ] Add read option
 
 ## Clocks!
-- [ ] Initialize RTC(Real Time Clock)
+- [X] Initialize RTC(Real Time Clock)
 - [X] Implement `/dev/time`
      - [X] DevFS integration
 - [ ] Initialize APIC
