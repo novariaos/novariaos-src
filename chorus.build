@@ -100,7 +100,7 @@ targets:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
-    
+
   core/kernel/mem/slab:
     deps: []
     cmds:

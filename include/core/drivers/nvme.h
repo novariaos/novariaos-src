@@ -61,7 +61,7 @@ typedef struct {
     uint64_t acq;
     uint32_t cmbloc;
     uint32_t cmbsz;
-    uint32_t reserved1[0x3B0];
+    uint32_t reserved1[0x3F0];
     uint32_t doorbells[];
 } __attribute__((packed)) nvme_controller_regs_t;
 

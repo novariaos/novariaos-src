@@ -9,10 +9,10 @@
 - [x] MMIO register access functions
 - [x] Identify namespace command
 - [x] NVMe read operations (polling mode)
-- [ ] NVMe write operations
+- [x] NVMe write operations (polling mode)
 - [ ] Interrupt-based I/O (currently uses polling)
 - [ ] Multiple namespace support
-- [ ] PCI enumeration for NVMe devices
+- [x] PCI enumeration for NVMe devices
 
 ## AHCI (SATA) Driver
 - [x] PCI bus scan for AHCI controller (class 01h/06h)
@@ -96,6 +96,14 @@
 - [ ] Program APIC timer
 - [ ] Implement `/proc/uptime` (seconds since boot)
      - Internal function: `uint64_t get_uptime(void)`
+- [ ] MSI-X support (requires APIC)
+     - PCI MSI-X capability discovery
+     - MSI-X table setup and vector allocation
+     - Route NVMe interrupt to IDT vector
+- [ ] NVMe interrupt-driven I/O (requires MSI-X)
+     - Replace polling loops in `nvme_read_blocks` / `nvme_write_blocks`
+     - Completion handler via IDT vector
+     - Synchronization primitive (semaphore or wait flag) to block caller until I/O done
 
 # Low Priority
 
