@@ -46,6 +46,9 @@
 
 #define NVME_IDENTIFY_CNS_NAMESPACE  0
 #define NVME_IDENTIFY_CNS_CONTROLLER 1
+#define NVME_IDENTIFY_CNS_NS_LIST    2
+
+#define NVME_MAX_NAMESPACES 16
 
 typedef struct {
     uint64_t cap;

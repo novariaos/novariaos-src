@@ -11,7 +11,7 @@
 - [x] NVMe read operations (polling mode)
 - [x] NVMe write operations (polling mode)
 - [ ] Interrupt-based I/O (currently uses polling)
-- [ ] Multiple namespace support
+- [x] Multiple namespace support
 - [x] PCI enumeration for NVMe devices
 
 ## AHCI (SATA) Driver
