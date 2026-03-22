@@ -137,6 +137,7 @@ static void init_multiprocessing(void) {
     kprint(":: CPU pool initialized\n", 7);
 }
 
+
 static void init_filesystems(void) {
     vfs_init();
     kprint(":: Virtual filesystem initialized\n", 7);
@@ -290,7 +291,7 @@ void kmain() {
     
     // Boot modules and root filesystem
     init_boot_modules();
-    
+
     // Display banner
     show_banner();
 
