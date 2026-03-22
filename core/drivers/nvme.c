@@ -3,11 +3,11 @@
 #include <core/drivers/nvme.h>
 #include <core/fs/block.h>
 #include <core/kernel/mem/allocator.h>
+#include <core/kernel/kstd.h>
 #include <log.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include <string.h>
 
 #define PCI_CONFIG_ADDR 0xCF8
 #define PCI_CONFIG_DATA 0xCFC
@@ -68,8 +68,13 @@ static uint16_t command_id = 0;
 static uint8_t admin_cq_phase = 1;
 static uint8_t io_cq_phase = 1;
 
-static uint32_t nsid = 1;
-static uint64_t block_count = 0;
+typedef struct {
+    uint32_t nsid;
+    uint64_t block_count;
+    uint32_t block_size;
+} nvme_namespace_t;
+
+static uint64_t* prp_list_buf = NULL;
 
 static inline void mmio_write32(volatile uint32_t* addr, uint32_t value) {
     *addr = value;
@@ -156,6 +161,16 @@ static int nvme_submit_admin_command(nvme_command_t* cmd) {
     return -1;
 }
 
+static int nvme_identify_active_namespaces(void* data) {
+    nvme_command_t cmd = {0};
+    cmd.cdw0 = NVME_ADMIN_IDENTIFY;
+    cmd.nsid = 0;
+    cmd.prp1 = VIRT_TO_PHYS(data);
+    cmd.cdw10 = NVME_IDENTIFY_CNS_NS_LIST;
+
+    return nvme_submit_admin_command(&cmd);
+}
+
 static int nvme_identify_namespace(uint32_t ns_id, void* data) {
     nvme_command_t cmd = {0};
     cmd.cdw0 = NVME_ADMIN_IDENTIFY;
@@ -171,7 +186,7 @@ static int nvme_create_io_completion_queue(uint16_t qid, uint16_t size, void* bu
     cmd.cdw0 = NVME_ADMIN_CREATE_CQ;
     cmd.prp1 = VIRT_TO_PHYS(buffer);
     cmd.cdw10 = ((uint32_t)(size - 1) << 16) | qid;
-    cmd.cdw11 = NVME_QUEUE_PHYS_CONTIG | NVME_CQ_IRQ_ENABLED;
+    cmd.cdw11 = NVME_QUEUE_PHYS_CONTIG;
 
     return nvme_submit_admin_command(&cmd);
 }
@@ -203,7 +218,6 @@ static int nvme_reset_controller(void) {
 }
 
 static int nvme_enable_controller(void) {
-    uint64_t cap = mmio_read64(&nvme_regs->cap);
     uint32_t page_shift = 12;
 
     uint32_t cc = 0;
@@ -275,12 +289,75 @@ static int nvme_setup_io_queues(void) {
         return -1;
     }
 
+    prp_list_buf = alloc_page_aligned(4096);
+    if (!prp_list_buf) {
+        LOG_ERROR("NVMe: Failed to allocate PRP list buffer\n");
+        return -1;
+    }
+
     LOG_DEBUG("NVMe: I/O queues created\n");
     return 0;
 }
 
+static void nvme_setup_prp(nvme_command_t* cmd, uint64_t buf_phys, size_t count, uint32_t block_size) {
+    uint64_t total_bytes = (uint64_t)count * block_size;
+    uint64_t pages = (total_bytes + 4095) / 4096;
+
+    cmd->prp1 = buf_phys;
+
+    if (pages <= 1) {
+        cmd->prp2 = 0;
+    } else if (pages == 2) {
+        cmd->prp2 = buf_phys + 4096;
+    } else {
+        for (uint64_t i = 1; i < pages; i++) {
+            prp_list_buf[i - 1] = buf_phys + i * 4096;
+        }
+        cmd->prp2 = VIRT_TO_PHYS(prp_list_buf);
+    }
+}
+
+static int nvme_submit_and_wait(nvme_command_t* cmd) {
+    uint16_t slot = io_sq_tail;
+    memcpy(&io_sq[slot], cmd, sizeof(nvme_command_t));
+
+    io_sq_tail = (io_sq_tail + 1) % NVME_IO_QUEUE_SIZE;
+    nvme_write_doorbell(1, io_sq_tail, true);
+
+    for (int timeout = 0; timeout < 10000; timeout++) {
+        nvme_completion_t* cqe = &io_cq[io_cq_head];
+        if ((cqe->status & 1) == io_cq_phase) {
+            uint16_t status_code = (cqe->status >> 1) & 0x7FFF;
+            io_cq_head = (io_cq_head + 1) % NVME_IO_QUEUE_SIZE;
+
+            if (io_cq_head == 0) {
+                io_cq_phase = !io_cq_phase;
+            }
+
+            nvme_write_doorbell(1, io_cq_head, false);
+
+            if (status_code != 0) {
+                LOG_ERROR("NVMe: I/O command failed with status 0x%x\n", status_code);
+                return -1;
+            }
+
+            return 0;
+        }
+
+        for (volatile int i = 0; i < 1000; i++);
+    }
+
+    LOG_ERROR("NVMe: I/O command timeout\n");
+    return -1;
+}
+
 static int nvme_read_blocks(struct block_device* dev, uint64_t lba, size_t count, void* buf) {
-    if (lba + count > block_count) {
+    nvme_namespace_t* ns = (nvme_namespace_t*)dev->private_data;
+    if (lba + count > ns->block_count) {
+        return -1;
+    }
+    if ((uintptr_t)buf & 0xFFF) {
+        LOG_ERROR("NVMe: read buffer not page-aligned (buf=%p)\n", buf);
         return -1;
     }
 
@@ -289,51 +366,17 @@ static int nvme_read_blocks(struct block_device* dev, uint64_t lba, size_t count
 
         nvme_command_t cmd = {0};
         cmd.cdw0 = NVME_CMD_READ | ((uint32_t)(command_id++) << 16);
-        cmd.nsid = nsid;
-        cmd.prp1 = VIRT_TO_PHYS(buf);
+        cmd.nsid = ns->nsid;
         cmd.cdw10 = (uint32_t)(lba & 0xFFFFFFFF);
         cmd.cdw11 = (uint32_t)(lba >> 32);
         cmd.cdw12 = (blocks_this_cmd - 1) & 0xFFFF;
+        nvme_setup_prp(&cmd, VIRT_TO_PHYS(buf), blocks_this_cmd, ns->block_size);
 
-        uint16_t slot = io_sq_tail;
-        memcpy(&io_sq[slot], &cmd, sizeof(nvme_command_t));
-
-        io_sq_tail = (io_sq_tail + 1) % NVME_IO_QUEUE_SIZE;
-        nvme_write_doorbell(1, io_sq_tail, true);
-
-        int timeout = 0;
-        while (timeout < 10000) {
-            nvme_completion_t* cqe = &io_cq[io_cq_head];
-            uint8_t phase = (cqe->status >> 0) & 1;
-
-            if (phase == io_cq_phase) {
-                uint16_t status_code = (cqe->status >> 1) & 0x7FFF;
-                io_cq_head = (io_cq_head + 1) % NVME_IO_QUEUE_SIZE;
-
-                if (io_cq_head == 0) {
-                    io_cq_phase = !io_cq_phase;
-                }
-
-                nvme_write_doorbell(1, io_cq_head, false);
-
-                if (status_code != 0) {
-                    LOG_ERROR("NVMe: Read command failed with status 0x%x\n", status_code);
-                    return -1;
-                }
-
-                break;
-            }
-
-            for (volatile int i = 0; i < 1000; i++);
-            timeout++;
-        }
-
-        if (timeout >= 10000) {
-            LOG_ERROR("NVMe: Read command timeout\n");
+        if (nvme_submit_and_wait(&cmd) < 0) {
             return -1;
         }
 
-        buf = (void*)((uint64_t)buf + blocks_this_cmd * 512);
+        buf = (void*)((uint64_t)buf + blocks_this_cmd * ns->block_size);
         lba += blocks_this_cmd;
         count -= blocks_this_cmd;
     }
@@ -342,7 +385,12 @@ static int nvme_read_blocks(struct block_device* dev, uint64_t lba, size_t count
 }
 
 static int nvme_write_blocks(struct block_device* dev, uint64_t lba, size_t count, const void* buf) {
-    if (lba + count > block_count) {
+    nvme_namespace_t* ns = (nvme_namespace_t*)dev->private_data;
+    if (lba + count > ns->block_count) {
+        return -1;
+    }
+    if ((uintptr_t)buf & 0xFFF) {
+        LOG_ERROR("NVMe: write buffer not page-aligned (buf=%p)\n", buf);
         return -1;
     }
 
@@ -351,51 +399,17 @@ static int nvme_write_blocks(struct block_device* dev, uint64_t lba, size_t coun
 
         nvme_command_t cmd = {0};
         cmd.cdw0 = NVME_CMD_WRITE | ((uint32_t)(command_id++) << 16);
-        cmd.nsid = nsid;
-        cmd.prp1 = VIRT_TO_PHYS(buf);
+        cmd.nsid = ns->nsid;
         cmd.cdw10 = (uint32_t)(lba & 0xFFFFFFFF);
         cmd.cdw11 = (uint32_t)(lba >> 32);
         cmd.cdw12 = (blocks_this_cmd - 1) & 0xFFFF;
+        nvme_setup_prp(&cmd, VIRT_TO_PHYS(buf), blocks_this_cmd, ns->block_size);
 
-        uint16_t slot = io_sq_tail;
-        memcpy(&io_sq[slot], &cmd, sizeof(nvme_command_t));
-
-        io_sq_tail = (io_sq_tail + 1) % NVME_IO_QUEUE_SIZE;
-        nvme_write_doorbell(1, io_sq_tail, true);
-
-        int timeout = 0;
-        while (timeout < 10000) {
-            nvme_completion_t* cqe = &io_cq[io_cq_head];
-            uint8_t phase = (cqe->status >> 0) & 1;
-
-            if (phase == io_cq_phase) {
-                uint16_t status_code = (cqe->status >> 1) & 0x7FFF;
-                io_cq_head = (io_cq_head + 1) % NVME_IO_QUEUE_SIZE;
-
-                if (io_cq_head == 0) {
-                    io_cq_phase = !io_cq_phase;
-                }
-
-                nvme_write_doorbell(1, io_cq_head, false);
-
-                if (status_code != 0) {
-                    LOG_ERROR("NVMe: Write command failed with status 0x%x\n", status_code);
-                    return -1;
-                }
-
-                break;
-            }
-
-            for (volatile int i = 0; i < 1000; i++);
-            timeout++;
-        }
-
-        if (timeout >= 10000) {
-            LOG_ERROR("NVMe: Write command timeout\n");
+        if (nvme_submit_and_wait(&cmd) < 0) {
             return -1;
         }
 
-        buf = (const void*)((uint64_t)buf + blocks_this_cmd * 512);
+        buf = (const void*)((uint64_t)buf + blocks_this_cmd * ns->block_size);
         lba += blocks_this_cmd;
         count -= blocks_this_cmd;
     }
@@ -413,7 +427,7 @@ void nvme_init(void) {
     }
 
     LOG_DEBUG("NVMe: BAR at 0x%llx\n", bar);
-    nvme_regs = (volatile nvme_controller_regs_t*)bar;
+    nvme_regs = (volatile nvme_controller_regs_t*)(bar + get_hhdm_offset());
 
     uint64_t cap = mmio_read64(&nvme_regs->cap);
     if (cap == 0xFFFFFFFFFFFFFFFFULL || cap == 0) {
@@ -435,21 +449,18 @@ void nvme_init(void) {
         return;
     }
 
-    uint8_t* identify_data = alloc_page_aligned(4096);
-    if (!identify_data) {
-        LOG_ERROR("NVMe: Failed to allocate identify buffer\n");
+    uint32_t* ns_list = alloc_page_aligned(4096);
+    if (!ns_list) {
+        LOG_ERROR("NVMe: Failed to allocate namespace list buffer\n");
         return;
     }
 
-    memset(identify_data, 0, 4096);
+    memset(ns_list, 0, 4096);
 
-    if (nvme_identify_namespace(nsid, identify_data) < 0) {
-        LOG_ERROR("NVMe: Failed to identify namespace\n");
+    if (nvme_identify_active_namespaces(ns_list) < 0) {
+        LOG_ERROR("NVMe: Failed to identify active namespaces\n");
         return;
     }
-
-    block_count = *(uint64_t*)identify_data;
-    LOG_DEBUG("NVMe: Namespace size: %llu blocks\n", block_count);
 
     if (nvme_setup_io_queues() < 0) {
         return;
@@ -460,7 +471,55 @@ void nvme_init(void) {
         .write_blocks = nvme_write_blocks,
     };
 
-    register_block_device("nvme0n1", 512, block_count, &ops, NULL);
+    uint8_t* ns_data = alloc_page_aligned(4096);
+    if (!ns_data) {
+        LOG_ERROR("NVMe: Failed to allocate namespace identify buffer\n");
+        return;
+    }
 
-    LOG_DEBUG("NVMe: Initialization complete\n");
+    int registered = 0;
+    for (int i = 0; i < NVME_MAX_NAMESPACES; i++) {
+        uint32_t id = ns_list[i];
+        if (id == 0) break;
+
+        memset(ns_data, 0, 4096);
+        if (nvme_identify_namespace(id, ns_data) < 0) {
+            LOG_ERROR("NVMe: Failed to identify namespace %u\n", id);
+            continue;
+        }
+
+        uint64_t nsze = *(uint64_t*)ns_data;
+        if (nsze == 0) continue;
+
+        uint8_t flbas = ns_data[26] & 0x0F;
+        uint8_t lbads = ns_data[128 + flbas * 4 + 2];
+        uint32_t block_size = lbads ? (1u << lbads) : 512;
+
+        nvme_namespace_t* ns = kmalloc(sizeof(nvme_namespace_t));
+        if (!ns) {
+            LOG_ERROR("NVMe: Failed to allocate namespace state\n");
+            continue;
+        }
+
+        ns->nsid = id;
+        ns->block_count = nsze;
+        ns->block_size = block_size;
+
+        char name[32];
+        char nsid_str[12];
+        strcpy(name, "nvme0n");
+        itoa(id, nsid_str, 10);
+        strcat(name, nsid_str);
+
+        register_block_device(name, block_size, nsze, &ops, ns);
+        LOG_DEBUG("NVMe: Registered %s (%llu blocks)\n", name, nsze);
+        registered++;
+    }
+
+    if (registered == 0) {
+        LOG_ERROR("NVMe: No namespaces found\n");
+        return;
+    }
+
+    LOG_DEBUG("NVMe: Initialization complete, %d namespace(s) registered\n", registered);
 }
