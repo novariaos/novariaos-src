@@ -183,6 +183,7 @@ struct vfs_file_handle {
     vfs_off_t position;
     int flags;
     void* private_data;
+    void* file;
 };
 
 // Function prototypes

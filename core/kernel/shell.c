@@ -14,6 +14,7 @@
 #include <core/arch/smp.h>
 #include <core/kernel/mem/slab.h>
 #include <core/kernel/tty.h>
+#include <core/fs/procfs.h>
 
 #define MAX_COMMAND_LENGTH 256
 #define MAX_PATH_LENGTH 256
@@ -124,7 +125,7 @@ static void cmd_cat(const char* args) {
         
         vfs_stat_t st;
         int rc = ops->stat ? ops->stat(mnt, rel, &st) : -1;
-        if (rc == 0 && (st.st_mode & 0xF000) != 0x4000) { // not a dir
+        if (rc == 0 && (st.st_mode & 0xF000) != 0x4000) {
             vfs_file_handle_t h;
             memset(&h, 0, sizeof(h));
             h.position = 0;
@@ -146,7 +147,6 @@ static void cmd_cat(const char* args) {
         }
     }
 
-    // Fallback to legacy VFS
     size_t size;
     const char* data = vfs_read(full_path, &size);
     if (data == NULL) {
@@ -205,7 +205,6 @@ static void cmd_ls(const char* args) {
     }
     kfree(entries);
 
-    // Fallback: legacy in-memory VFS
     vfs_file_t* files = vfs_get_files();
     int dir_len = (int)flen;
 
@@ -369,33 +368,6 @@ static int parse_command(const char* command, char* argv[], int max_args) {
 static int should_delay_prompt = 0;
 static int delay_ticks = 0;
 
-static int create_spawn_stack(char* argv[], int argc, int32_t** stack_out) {
-    if (argc == 0) return 0;
-
-    int total_size = 0;
-    for (int i = 0; i < argc; i++) {
-        total_size += strlen(argv[i]) + 1;
-    }
-    total_size += 1;
-
-    int32_t* stack = kmalloc(total_size * sizeof(int32_t));
-    if (!stack) return -1;
-
-    int pos = 0;
-
-    for (int i = argc - 1; i >= 0; i--) {
-        char* arg = argv[i];
-        for (int j = 0; arg[j] != '\0'; j++) {
-            stack[pos++] = (int32_t)(uint8_t)arg[j];
-        }
-        stack[pos++] = 0;
-    }
-
-    stack[pos++] = argc;
-    *stack_out = stack;
-    return pos;
-}
-
 static void execute_command(const char* command) {
     while (*command == ' ') command++;
     
@@ -459,6 +431,7 @@ static void execute_command(const char* command) {
         bin_path[7 + len] = 'i';
         bin_path[8 + len] = 'n';
         bin_path[9 + len] = '\0';
+        
         if (vfs_exists(bin_path)) {
             size_t size;
             const char* data = vfs_read(bin_path, &size);
@@ -467,47 +440,41 @@ static void execute_command(const char* command) {
                 should_delay_prompt = 1;
                 delay_ticks = 50;
                 
-                int total_string_len = 0;
-                for (int i = 0; i < argc; i++) {
-                    total_string_len += strlen(argv[i]) + 1;
-                }
-
-                int stack_size = 1 + argc + total_string_len;
-                int32_t* initial_stack = kmalloc(stack_size * sizeof(int32_t));
-                
-                if (!initial_stack) {
+                uint8_t* bytecode = kmalloc(size);
+                if (!bytecode) {
                     kprint("Error: Memory allocation failed\n", 12);
                     return;
                 }
                 
-                int stack_pos = 0;
-
-                initial_stack[stack_pos++] = argc;
-
-                int argv_pointers_start = stack_pos;
-                stack_pos += argc;
-
-                for (int i = 0; i < argc; i++) {
-                    initial_stack[argv_pointers_start + i] = stack_pos;
-
-                    char* arg = argv[i];
-                    for (int j = 0; arg[j] != '\0'; j++) {
-                        initial_stack[stack_pos++] = (int32_t)(uint8_t)arg[j];
-                    }
-                    initial_stack[stack_pos++] = 0;
+                for (size_t i = 0; i < size; i++) {
+                    bytecode[i] = (uint8_t)data[i];
                 }
-
-                int pid = nvm_create_process_with_stack(
-                    (uint8_t*)data, size,
-                    (uint16_t[]){CAP_ALL}, 1,
-                    initial_stack, stack_pos
-                );
                 
-                kfree(initial_stack);
+                int pid = nvm_create_process(bytecode, size,
+                                            (uint16_t[]){CAP_ALL}, 1);
                 
                 if (pid < 0) {
+                    kfree(bytecode);
                     kprint("Error: Failed to create process\n", 12);
+                    return;
                 }
+                
+                if (argc > 1) {
+                    procfs_set_args(pid, &argv[1], argc - 1);
+                } else {
+                    procfs_set_args(pid, NULL, 0);
+                }
+                
+                kprint("Started process ", 7);
+                char pid_str[8];
+                itoa(pid, pid_str, 10);
+                kprint(pid_str, 11);
+                kprint(" with ", 7);
+                char argc_str[8];
+                itoa(argc, argc_str, 10);
+                kprint(argc_str, 11);
+                kprint(" arguments\n", 7);
+                
                 return;
             } else {
                 kprint("Error: Failed to read program file\n", 12);
@@ -604,7 +571,6 @@ static bool directory_exists(const char* path) {
         return true;
     }
     
-    // Fallback to legacy VFS for backward compatibility
     vfs_file_t* files = vfs_get_files();
     size_t path_len = strlen(path);
     

@@ -13,5 +13,6 @@ vfs_ssize_t procfs_uptime(vfs_file_t* file, void* buf, size_t count, vfs_off_t* 
 vfs_ssize_t procfs_version(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos);
 void procfs_init(void);
 void cpuinfo_init(void);
+void procfs_set_args(int pid, char* argv[], int argc);
 
 #endif
