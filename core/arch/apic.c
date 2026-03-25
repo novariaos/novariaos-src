@@ -110,6 +110,7 @@ bool apic_init(void) {
     lapic_write(LAPIC_TIMER_INITCNT, lapic_ticks_per_ms);
 
     lapic_enabled = true;
+    __asm__ volatile("sti");
     LOG_INFO("APIC: Initialized successfully\n");
     return true;
 }
