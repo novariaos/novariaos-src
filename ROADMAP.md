@@ -92,10 +92,10 @@
 - [X] Initialize RTC(Real Time Clock)
 - [X] Implement `/dev/time`
      - [X] DevFS integration
-- [ ] Initialize APIC
-- [ ] Program APIC timer
-- [ ] Implement `/proc/uptime` (seconds since boot)
-     - Internal function: `uint64_t get_uptime(void)`
+- [X] Initialize APIC
+- [X] Program APIC timer
+- [X] Implement `/proc/uptime` (seconds since boot)
+     - [X] Internal function: `uint64_t get_uptime(void)`
 - [ ] MSI-X support (requires APIC)
      - PCI MSI-X capability discovery
      - MSI-X table setup and vector allocation
