@@ -2,6 +2,7 @@
 
 #include <core/drivers/timer.h>
 #include <core/arch/rtc.h>
+#include <core/arch/apic.h>
 #include <core/arch/io.h>
 #include <core/kernel/kstd.h>
 #include <core/kernel/tty.h>
@@ -21,6 +22,7 @@ static uint64_t rtc_adapter_get_time(void) {
 
 static uint64_t rtc_adapter_get_uptime(void) {
     if (!timer_initialized) return 0;
+    if (apic_available()) return apic_get_uptime_ms();
     return 0;
 }
 
