@@ -30,7 +30,7 @@ targets:
 
   kernel.bin:
       deps: [prepare,
-            core/arch/boot, core/arch/idt, core/arch/spinlock, core/arch/cpuid, core/arch/entropy, core/arch/smp, core/arch/work_queue, core/arch/panic, core/arch/rtc,
+            core/arch/boot, core/arch/idt, core/arch/apic, core/arch/spinlock, core/arch/cpuid, core/arch/entropy, core/arch/smp, core/arch/work_queue, core/arch/panic, core/arch/rtc,
 
             core/kernel/kernel, core/kernel/kstd, core/kernel/tty, core/kernel/shell,
 
@@ -87,6 +87,11 @@ targets:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
   core/arch/spinlock:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
+  core/arch/apic:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"

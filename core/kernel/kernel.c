@@ -27,6 +27,7 @@
 #include <limine.h>
 #include <core/kernel/elf.h>
 #include <core/arch/idt.h>
+#include <core/arch/apic.h>
 #include <core/arch/smp.h>
 #include <core/arch/work_queue.h>
 #include <core/kernel/mem/slab.h>
@@ -106,6 +107,14 @@ static void init_memory(void) {
 static void init_interrupts(void) {
     idt_init();
     kprint(":: Interrupt descriptor table initialized\n", 7);
+}
+
+static void init_apic(void) {
+    if (apic_init()) {
+        kprint(":: APIC initialized\n", 7);
+    } else {
+        kprint(":: APIC unavailable, falling back to legacy PIC\n", 7);
+    }
 }
 
 static void init_syslog(void) {
@@ -280,6 +289,7 @@ void kmain() {
     // Core system initialization
     init_memory();
     init_interrupts();
+    init_apic();
     init_syslog();
     init_keyboard();
     init_nvm();
