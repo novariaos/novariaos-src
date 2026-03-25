@@ -33,12 +33,12 @@ static void wait_ready(void) {
 }
 
 void rtc_init(void) {
-    tty_puts("RTC: Initializing...\n");
+    tty_puts(":: RTC: Initializing...\n");
     
     uint8_t status_b = read_register(RTC_STATUS_B);
     
     char buf[16];
-    tty_puts("RTC: Status B = 0x");
+    tty_puts(":: RTC: Status B = 0x");
     itoa(status_b, buf, 16);
     tty_puts(buf);
     tty_puts("\n");
@@ -49,14 +49,14 @@ void rtc_init(void) {
     write_register(RTC_STATUS_B, status_b);
     
     status_b = read_register(RTC_STATUS_B);
-    tty_puts("RTC: New Status B = 0x");
+    tty_puts(":: RTC: New Status B = 0x");
     itoa(status_b, buf, 16);
     tty_puts(buf);
     tty_puts("\n");
     
     read_register(RTC_STATUS_C);
     
-    tty_puts("RTC: Initialization complete\n");
+    tty_puts(":: RTC: Initialization complete\n");
 }
 
 rtc_time_t rtc_read_time(void) {

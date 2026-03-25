@@ -764,31 +764,47 @@ vfs_ssize_t procfs_pci(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos
 
 vfs_ssize_t procfs_uptime(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos) {
     (void)file;
+    
+    uint64_t uptime_ms = timer_get_uptime();
+    uint64_t seconds = uptime_ms / 1000;
+    uint64_t centiseconds = (uptime_ms % 1000) / 10;
+    
+    char uptime_buffer[64];
+    char seconds_str[24];
+    char centiseconds_str[8];
+    
+    itoa((int)seconds, seconds_str, 10);
+    itoa((int)centiseconds, centiseconds_str, 10);
+    
+    size_t idx = 0;
+    
+    for (const char* p = seconds_str; *p; p++) {
+        uptime_buffer[idx++] = *p;
+    }
+    uptime_buffer[idx++] = '.';
+    
+    if (centiseconds < 10) {
+        uptime_buffer[idx++] = '0';
+    }
 
-    char uptime_buf[64];
-    uint64_t ms = timer_get_uptime();
-    uint64_t secs = ms / 1000;
-    uint64_t frac = (ms % 1000) / 10;
+    for (const char* p = centiseconds_str; *p; p++) {
+        uptime_buffer[idx++] = *p;
+    }
+    
+    uptime_buffer[idx++] = '\n';
+    uptime_buffer[idx] = '\0';
+    
+    size_t len = idx;
+    if (*pos >= (vfs_off_t)len) {
+        return 0;
+    }
 
-    char sec_str[24];
-    char frac_str[8];
-    itoa((int)secs, sec_str, 10);
-    itoa((int)frac, frac_str, 10);
-
-    size_t pos_w = 0;
-    for (const char* p = sec_str; *p; p++) uptime_buf[pos_w++] = *p;
-    uptime_buf[pos_w++] = '.';
-    if (frac < 10) uptime_buf[pos_w++] = '0';
-    for (const char* p = frac_str; *p; p++) uptime_buf[pos_w++] = *p;
-    uptime_buf[pos_w++] = '\n';
-    uptime_buf[pos_w] = '\0';
-
-    size_t len = pos_w;
-    if (*pos >= (vfs_off_t)len) return 0;
     size_t remaining = len - *pos;
     size_t to_copy = remaining < count ? remaining : count;
-    memcpy(buf, uptime_buf + *pos, to_copy);
+    
+    memcpy(buf, uptime_buffer + *pos, to_copy);
     *pos += to_copy;
+    
     return (vfs_ssize_t)to_copy;
 }
 
