@@ -1,7 +1,7 @@
-NAME=NovariaOS
+NAME=avariaOZV
 VERSION="0.3.0"
-ID=novariaos
+ID=avariaOZV
 ANSI_COLOR="0;33"
-PRETTY_NAME="NovariaOS 0.3.0-INDEV"
-HOME_URL="https://novariaos.github.io/"
-BUG_REPORT_URL="https://github.com/novariaos/novariaos-src/issues"
+PRETTY_NAME="avariaOZV 0.3.0-INDEV"
+HOME_URL="https://avariaOZV.github.io/"
+BUG_REPORT_URL="https://github.com/avariaOZV/avariaOZV-src/issues"

@@ -1,4 +1,4 @@
-# Roadmap for NovariaOS 0.3.0
+# Roadmap for avariaOZV 0.3.0
 
 # High Priority
 

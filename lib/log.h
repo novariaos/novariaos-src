@@ -26,31 +26,31 @@ static size_t log_size = 0;
 
 static inline void syslog_print(const char* message) {
     if (!message) return;
-    
+
     int i = 0;
     while (message[i] != '\0' && log_size < MAX_LOG_SIZE - 1) {
         log_buffer[log_size++] = message[i++];
     }
     log_buffer[log_size] = '\0';
-    
+
     vfs_create("/var/log/system.log", log_buffer, log_size);
 }
 
 static inline char* utoa_hex(uintptr_t num, char* str) {
     int i = 0;
-    
+
     if (num == 0) {
         str[i++] = '0';
         str[i] = '\0';
         return str;
     }
-    
+
     while (num != 0) {
         int rem = num % 16;
         str[i++] = (rem > 9) ? (rem - 10) + 'A' : rem + '0';
         num /= 16;
     }
-    
+
     str[i] = '\0';
     reverse(str, i);
     return str;
@@ -60,7 +60,7 @@ static inline void log_format_basic(const char* level, const char* format, ...) 
     char buffer[256];
     char temp_buf[32];
     int buf_pos = 0;
-    
+
     buffer[buf_pos++] = '[';
     const char* l = level;
     while (*l) {
@@ -71,85 +71,85 @@ static inline void log_format_basic(const char* level, const char* format, ...) 
 
     va_list args;
     va_start(args, format);
-    
+
     const char* fmt = format;
     while (*fmt && buf_pos < 250) {
         if (*fmt == '%' && *(fmt + 1) == 'd') {
             int value = va_arg(args, int);
             itoa(value, temp_buf, 10);
-            
+
             char* n = temp_buf;
             while (*n) {
                 buffer[buf_pos++] = *n++;
             }
-            
+
             fmt += 2;
         } else if (*fmt == '%' && *(fmt + 1) == 'u') {
             unsigned int value = va_arg(args, unsigned int);
             itoa((int)value, temp_buf, 10);
-            
+
             char* n = temp_buf;
             while (*n) {
                 buffer[buf_pos++] = *n++;
             }
-            
+
             fmt += 2;
         } else if (*fmt == '%' && *(fmt + 1) == 'z' && *(fmt + 2) == 'u') {
             size_t value = va_arg(args, size_t);
             itoa((int)value, temp_buf, 10);
-            
+
             char* n = temp_buf;
             while (*n) {
                 buffer[buf_pos++] = *n++;
             }
-            
+
             fmt += 3;
         } else if (*fmt == '%' && *(fmt + 1) == 'x') {
             unsigned int value = va_arg(args, unsigned int);
             itoa((int)value, temp_buf, 16);
-            
+
             char* n = temp_buf;
             while (*n) {
                 buffer[buf_pos++] = *n++;
             }
-            
+
             fmt += 2;
         } else if (*fmt == '%' && *(fmt + 1) == '0' && *(fmt + 2) == '8' && *(fmt + 3) == 'x') {
             unsigned int value = va_arg(args, unsigned int);
-            
+
             for (int i = 0; i < 8; i++) {
                 temp_buf[i] = '0';
             }
             temp_buf[8] = '\0';
-            
+
             char hex_buf[32];
             itoa((int)value, hex_buf, 16);
-            
+
             int len = 0;
             while (hex_buf[len]) len++;
-            
+
             int start = 8 - len;
             for (int i = 0; i < len; i++) {
                 temp_buf[start + i] = hex_buf[i];
             }
-            
+
             char* n = temp_buf;
             while (*n) {
                 buffer[buf_pos++] = *n++;
             }
-            
+
             fmt += 4;
         } else if (*fmt == '%' && *(fmt + 1) == 's') {
             const char* str = va_arg(args, const char*);
             while (*str) {
                 buffer[buf_pos++] = *str++;
             }
-            
+
             fmt += 2;
         } else if (*fmt == '%' && *(fmt + 1) == 'c') {
             char c = (char)va_arg(args, int);
             buffer[buf_pos++] = c;
-            
+
             fmt += 2;
         } else if (*fmt == '%' && *(fmt + 1) == 'p') {
             void* ptr = va_arg(args, void*);
@@ -158,19 +158,19 @@ static inline void log_format_basic(const char* level, const char* format, ...) 
 
             uintptr_t addr = (uintptr_t)ptr;
             utoa_hex(addr, temp_buf);
-            
+
             int len = 0;
             while (temp_buf[len]) len++;
-     
+
             for (int i = len; i < 8; i++) {
                 buffer[buf_pos++] = '0';
             }
-            
+
             char* n = temp_buf;
             while (*n) {
                 buffer[buf_pos++] = *n++;
             }
-            
+
             fmt += 2;
         } else if (*fmt == '%' && *(fmt + 1) == '%') {
             buffer[buf_pos++] = '%';
@@ -179,9 +179,9 @@ static inline void log_format_basic(const char* level, const char* format, ...) 
             buffer[buf_pos++] = *fmt++;
         }
     }
-    
+
     va_end(args);
-    
+
     buffer[buf_pos] = '\0';
     serial_print(buffer);
     syslog_print(buffer);
@@ -190,8 +190,8 @@ static inline void log_format_basic(const char* level, const char* format, ...) 
 static inline void syslog_init(void) {
     log_buffer[0] = '\0';
     log_size = 0;
-    
-    const char* init_msg = "=== NovariaOS System Log ===\n";
+
+    const char* init_msg = "=== avariaOZV System Log ===\n";
     int i = 0;
     while (init_msg[i] != '\0' && log_size < MAX_LOG_SIZE - 1) {
         log_buffer[log_size++] = init_msg[i++];

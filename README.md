@@ -1,4 +1,4 @@
-# NovariaOS
+# avariaOZV
 <p align="center">
     <img src="https://img.shields.io/badge/NovariaOS-EXPERIMENTAL-fbb714?style=for-the-badge">
     <img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/novariaos/novariaos-src?style=for-the-badge&label=Stars">
@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  <img src="meta/screenshots/novaria-fetch.jpg" height=500 alt="NovariaOS booting in QEMU">
+  <img src="meta/screenshots/novaria-fetch.jpg" height=500 alt="avariaOZV booting in QEMU">
 <br>
-  <em>NovariaOS booting on QEMU (x86_64)</em>
+  <em>avariaOZV booting on QEMU (x86_64)</em>
 </p>
 
 ---
@@ -19,12 +19,12 @@
 ## 📌 Introduction
 
 > [!Warning] 
-> NovariaOS is an experimental research operating system.
+> avariaOZV is an experimental research operating system.
 > It is **not stable**, **not secure**, till.
 > 
 > Expect breaking changes. Do not use on production hardware.
 
-**NovariaOS** is not a Linux distro or fork of something.. It is a **ground-up implementation** of a capability-based operating system with a built-in virtual machine (NVM) for permanently eliminate incompatibility between user software and hardware
+**avariaOZV** is not a Linux distro or fork of something.. It is a **ground-up implementation** of a capability-based operating system with a built-in virtual machine (NVM) for permanently eliminate incompatibility between user software and hardware
 We are not trying to replace anything. We are exploring an alternative path.
 
 ---
@@ -64,7 +64,7 @@ We are not trying to replace anything. We are exploring an alternative path.
 
 ## 💬 Community
 
-We have a [Telegram channel](https://t.me/NovariaOS).  
+We have a [Telegram channel](https://t.me/avariaOZV).  
 We don't bite. We discuss stupid ideas, breaking changes, and occasionally working code.
 
 If you want to contribute:

@@ -12,8 +12,8 @@ variables:
   KERNEL_OUT: kernel.bin
   DATE: "$(date +%Y-%m-%d)"
 
-  OS_NAME: NovariaOS
-  OS_ID: novariaos
+  OS_NAME: avariaOZV
+  OS_ID: avariaOZV
   OS_VERSION: 0.3.0
   OS_STAGE: INDEV   # INDEV | RELEASE
   OS_COLOR: "0;33"
@@ -395,7 +395,7 @@ targets:
         fi
       - >
         sh -c 'mkdir -p rootfs/etc && echo
-        "NAME=${OS_NAME}\nVERSION=\"${OS_VERSION}\"\nID=${OS_ID}\nANSI_COLOR=\"${OS_COLOR}\"\nPRETTY_NAME=\"${OS_NAME} ${OS_VERSION}-RELEASE\"\nHOME_URL=\"https://novariaos.github.io/\"\nBUG_REPORT_URL=\"https://github.com/novariaos/novariaos-src/issues\""
+        "NAME=${OS_NAME}\nVERSION=\"${OS_VERSION}\"\nID=${OS_ID}\nANSI_COLOR=\"${OS_COLOR}\"\nPRETTY_NAME=\"${OS_NAME} ${OS_VERSION}-RELEASE\"\nHOME_URL=\"https://avariaOZV.github.io/\"\nBUG_REPORT_URL=\"https://github.com/avariaOZV/avariaOZV-src/issues\""
         > rootfs/etc/os-release'
       - "cp limine/limine-bios-cd.bin ${BUILD_DIR}/boot/"
       - "xorriso -as mkisofs -quiet -iso-level 3 -o ${BUILD_DIR}/boot/rootfs.img rootfs/"
