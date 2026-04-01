@@ -76,7 +76,7 @@ static void show_banner(void) {
         "| |\\  | (_) \\ V / (_| | |  | | (_| | |_| |___) |",
         "|_| \\_|\\___/ \\_/ \\__,_|_|  |_|\\__,_|\\___/|____/ "
     };
-    
+
     fb_set_font_loaded();
     for (int i = 0; i < sizeof(ascii_art) / sizeof(ascii_art[0]); i++) {
         kprint(ascii_art[i], 15);
@@ -84,7 +84,7 @@ static void show_banner(void) {
     }
 
     kprint("                                 TG: ", 15);
-    kprint("@NovariaOS\n", 9);
+    kprint("@avariaOZV\n", 9);
 }
 
 static void init_video(void) {
@@ -135,13 +135,13 @@ static void init_nvm(void) {
 static void init_multiprocessing(void) {
     smp_init(smp_request.response);
     kprint(":: SMP initialized\n", 7);
-    
+
     wq_init();
     kprint(":: Work queue initialized\n", 7);
-    
+
     slab_cpu_init(0);
     kprint(":: Slab allocator initialized\n", 7);
-    
+
     cpu_pool_init(0);
     kprint(":: CPU pool initialized\n", 7);
 }
@@ -150,25 +150,25 @@ static void init_multiprocessing(void) {
 static void init_filesystems(void) {
     vfs_init();
     kprint(":: Virtual filesystem initialized\n", 7);
-    
+
     block_init();
     kprint(":: Block subsystem initialized\n", 7);
-    
+
     ide_init();
     kprint(":: IDE controller initialized\n", 7);
-    
+
     nvme_init();
     kprint(":: NVMe controller initialized\n", 7);
-    
+
     ahci_init();
     kprint(":: AHCI controller initialized\n", 7);
-    
+
     fat32_init();
     kprint(":: FAT32 filesystem initialized\n", 7);
-    
+
     ext2_init();
     kprint(":: Ext2 filesystem initialized\n", 7);
-    
+
     block_dev_vfs_init();
     kprint(":: Block device VFS layer initialized\n", 7);
 }
@@ -220,10 +220,10 @@ static void init_boot_modules(void) {
         cdrom_set_iso_data(iso_location, iso_size);
         cdrom_init();
         kprint(":: CD-ROM initialized from boot module\n", 7);
-        
+
         iso9660_init(iso_location, iso_size);
         kprint(":: ISO9660 filesystem initialized\n", 7);
-        
+
         iso9660_mount_to_vfs("/", "/");
         kprint(":: Root filesystem mounted from rootfs.img (ISO9660)\n", 7);
 
@@ -242,7 +242,7 @@ static void load_kernel_modules(void) {
     if (num > 0) {
         char path[256];
         int loaded = 0;
-        
+
         for (int i = 0; i < num; i++) {
             const char* name = entries[i].d_name;
             size_t len = strlen(name);
@@ -259,7 +259,7 @@ static void load_kernel_modules(void) {
                 }
             }
         }
-        
+
         if (loaded > 0) {
             kprint(":: Loaded ", 7);
             char count_str[16];
@@ -285,7 +285,7 @@ void kmain() {
     // Early initialization
     init_serial_port();
     init_video();
-    
+
     // Core system initialization
     init_memory();
     init_interrupts();
@@ -295,10 +295,10 @@ void kmain() {
     init_nvm();
     init_multiprocessing();
     init_timer_subsystem();
-    
+
     // Filesystem initialization
     init_filesystems();
-    
+
     // Boot modules and root filesystem
     init_boot_modules();
 
@@ -309,7 +309,7 @@ void kmain() {
 
     shell_init();
     shell_run();
-    
+
     // Work loop
     while(true) {
         keyboard_getchar();

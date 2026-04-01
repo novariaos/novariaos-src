@@ -127,8 +127,8 @@ void exception_halt(const char* name, interrupt_frame_t* frame,
         serial_print("R14    = "); serial_hex64(regs->r14); serial_print("\n");
         serial_print("R15    = "); serial_hex64(regs->r15); serial_print("\n");
     }
-    serial_print("\nPlease report this issue at https://github.com/novariaos/novariaos-src\n");
-    serial_print("System halted. -- NovariaOS\n");
+    serial_print("\nPlease report this issue at https://github.com/avariaOZV/avariaOZV-src\n");
+    serial_print("System halted. -- avariaOZV\n");
 
     pfb_clear();
 
@@ -191,9 +191,9 @@ void exception_halt(const char* name, interrupt_frame_t* frame,
     }
 
     pfb_cur_y += 16; pfb_cur_x = 8;
-    pfb_puts("Please report this issue at https://github.com/novariaos/novariaos-src", PANIC_DIM);
+    pfb_puts("Please report this issue at https://github.com/avariaOZV/avariaOZV-src", PANIC_DIM);
     pfb_cur_y += 12; pfb_cur_x = 8;
-    pfb_puts("NovariaOS  |  System halted", PANIC_HL);
+    pfb_puts("avariaOZV  |  System halted", PANIC_HL);
 
     for (;;) __asm__ volatile("hlt");
 }
@@ -203,7 +203,7 @@ void panic(const char* message) {
     serial_print("\nKERNEL PANIC: ");
     serial_print(message);
     serial_print("\n");
-    
+
     if (pfb_addr) {
         pfb_clear();
         pfb_cur_x = 8; pfb_cur_y = 16;
