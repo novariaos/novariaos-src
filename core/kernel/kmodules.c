@@ -20,20 +20,34 @@ struct kernel_api {
     uint32_t (*get_fb_pitch_pixels)(void);
 };
 
+static int file_exists(const char* path) {
+    vfs_stat_t stat;
+    if (vfs_stat(path, &stat) == 0) {
+        return 1;
+    }
+    return 0;
+}
+
 int kmodule_load(const char* path) {
-    if (!vfs_exists(path)) {
+    if (!file_exists(path)) {
         LOG_DEBUG("Module not found: %s\n", path);
         return -1;
     }
 
     int fd = vfs_open(path, VFS_READ);
     if (fd < 0) {
-        LOG_DEBUG("Failed to open module: %s\n", path);
+        LOG_DEBUG("Failed to open module: %s (error %d)\n", path, fd);
         return -2;
     }
 
-    vfs_off_t file_size = vfs_seek(fd, 0, VFS_SEEK_END);
-    vfs_seek(fd, 0, VFS_SEEK_SET);
+    vfs_stat_t stat;
+    if (vfs_stat(path, &stat) != 0) {
+        LOG_DEBUG("Failed to stat module: %s\n", path);
+        vfs_close(fd);
+        return -3;
+    }
+    
+    vfs_off_t file_size = stat.st_size;
     
     if (file_size <= 0) {
         vfs_close(fd);
@@ -46,20 +60,26 @@ int kmodule_load(const char* path) {
         return -4;
     }
     
-    vfs_readfd(fd, elf_data, file_size);
+    vfs_ssize_t bytes_read = vfs_readfd(fd, elf_data, file_size);
     vfs_close(fd);
+
+    if (bytes_read != file_size) {
+        LOG_DEBUG("Failed to read full module: got %d of %d bytes\n", bytes_read, file_size);
+        kfree(elf_data);
+        return -5;
+    }
 
     if (!elf_validate(elf_data, file_size)) {
         LOG_DEBUG("Invalid ELF file\n");
         kfree(elf_data);
-        return -5;
+        return -6;
     }
 
     program_info_t prog_info;
     if (elf_get_program_info(elf_data, file_size, &prog_info) < 0) {
         LOG_DEBUG("Failed to get program info\n");
         kfree(elf_data);
-        return -6;
+        return -7;
     }
 
     uint16_t phnum = elf_get_phnum64(elf_data);
@@ -78,7 +98,7 @@ int kmodule_load(const char* path) {
     if (min_vaddr == UINT64_MAX || max_vaddr == 0) {
         LOG_DEBUG("No loadable segments\n");
         kfree(elf_data);
-        return -7;
+        return -8;
     }
 
     uint64_t total_size = max_vaddr - min_vaddr;
@@ -87,7 +107,7 @@ int kmodule_load(const char* path) {
     void* load_addr = kmalloc(total_size + 0x1000); 
     if (!load_addr) {
         kfree(elf_data);
-        return -8;
+        return -9;
     }
 
     uintptr_t aligned_addr = ((uintptr_t)load_addr + 0xFFF) & ~0xFFF;
@@ -99,7 +119,7 @@ int kmodule_load(const char* path) {
         LOG_DEBUG("Failed to load ELF segments\n");
         kfree(elf_data);
         kfree(load_addr);
-        return -9;
+        return -10;
     }
     
     kfree(elf_data);
