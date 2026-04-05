@@ -9,7 +9,7 @@ static block_device_t block_devices[MAX_BLOCK_DEVICES];
 
 void block_init(void) {
     memset(block_devices, 0, sizeof(block_devices));
-    LOG_INFO("Block device layer initialized.");
+    LOG_INFO("Block device layer initialized.\n");
 }
 
 int register_block_device(const char* name, uint32_t block_size, uint64_t total_blocks, 
