@@ -34,7 +34,7 @@ We are not trying to replace anything. We are exploring an alternative path.
 | Area         | Status      | Notes |
 |--------------|-------------|-------|
 | **x86_64**   | ✅ Boot     | Limine, IDT, Initial setup |
-| **Memory**   | 🟡 Partial  | Buddy+slab(WIP) allocator |
+| **Memory**   | ✅ Work     | BBuddy+slab allocator |
 | **NVM**      | ✅ Work     | Stack machine, 27 opcodes, no JIT |
 | **CAPS**     | ✅ Work     | Capability lists, runtime checks |
 | **Filesystem** | ✅ Work   | In-memory r/w, VFS, iso9660 (planned: ext2 and FAT32) |
