@@ -54,8 +54,13 @@
      - Mark dirty and sync
 
 ## NVM extension (bit shifts)
-- [ ] Add SHL (0x70) instruction to interpreter
-- [ ] Add SHR (0x71) instruction to interpreter
+- [x] Add SHL (0x70) instruction to interpreter
+- [x] Add SHR (0x71) instruction to interpreter
+- [x] Add SAR (0x72) instruction to interpreter
+- [x] Add AND (0x60) instruction to interpreter
+- [x] Add OR  (0x61) instruction to interpreter
+- [x] Add XOR (0x62) instruction to interpreter
+- [x] Add NOT (0x63) instruction to interpreter
 - [ ] Write test programs to verify shifts
 
 ## Basic system calls (export minimal DMA)
