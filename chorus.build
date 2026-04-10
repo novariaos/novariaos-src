@@ -46,7 +46,7 @@ targets:
 
             core/kernel/elf/parser, core/kernel/kmodules,
 
-            core/kernel/nvm/nvm, core/kernel/nvm/caps, core/kernel/nvm/instructions/arithmetic,
+            core/kernel/nvm/nvm, core/kernel/nvm/caps, core/kernel/nvm/instructions/arithmetic, core/kernel/nvm/instructions/bitwise,
             core/kernel/nvm/instructions/stack, core/kernel/nvm/instructions/flowcontrol,
             core/kernel/nvm/instructions/memory, core/kernel/nvm/instructions/system, core/kernel/nvm/syscalls,
 
@@ -147,6 +147,11 @@ targets:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
   core/kernel/nvm/instructions/flowcontrol:
+    deps: []
+    cmds:
+      - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
+
+  core/kernel/nvm/instructions/bitwise:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"

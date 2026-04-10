@@ -266,6 +266,14 @@ void nvm_init_instruction_table(void) {
     
     instruction_table[0x50] = handle_syscall;
     instruction_table[0x51] = handle_break;
+    
+    instruction_table[0x60] = handle_and;
+    instruction_table[0x61] = handle_or;
+    instruction_table[0x62] = handle_xor;
+    instruction_table[0x63] = handle_not;
+    instruction_table[0x64] = handle_shl;
+    instruction_table[0x65] = handle_shr;
+    instruction_table[0x66] = handle_sar;
 }
 
 

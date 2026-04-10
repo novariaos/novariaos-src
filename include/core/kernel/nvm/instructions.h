@@ -48,4 +48,13 @@ bool handle_store_abs(nvm_process_t* proc);
 bool handle_syscall(nvm_process_t* proc);
 bool handle_break(nvm_process_t* proc);
 
+// Bitwise
+bool handle_and(nvm_process_t* proc);
+bool handle_or(nvm_process_t* proc);
+bool handle_xor(nvm_process_t* proc);
+bool handle_not(nvm_process_t* proc);
+bool handle_shl(nvm_process_t* proc);
+bool handle_shr(nvm_process_t* proc);
+bool handle_sar(nvm_process_t* proc);
+
 #endif // NVM_INSTRUCTION_H
