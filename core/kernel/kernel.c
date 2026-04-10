@@ -259,14 +259,6 @@ static void load_kernel_modules(void) {
                 }
             }
         }
-        
-        if (loaded > 0) {
-            kprint(":: Loaded ", 7);
-            char count_str[16];
-            itoa(loaded, count_str, 10);
-            kprint(count_str, 9);
-            kprint(" kernel module(s)\n", 7);
-        }
     } else {
         kprint(":: No kernel modules found\n", 7);
     }
