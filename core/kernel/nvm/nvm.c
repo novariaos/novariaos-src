@@ -4,10 +4,13 @@
 #include <core/drivers/serial.h>
 #include <core/kernel/nvm/nvm.h>
 #include <core/kernel/nvm/caps.h>
+#include <core/kernel/nvm/instructions.h>
 #include <core/kernel/kstd.h>
 #include <log.h>
 #include <core/fs/procfs.h>
 #include <stdint.h>
+
+#define HEAP_SIZE (128 * 1024)  // 128 KiB
 
 nvm_process_t processes[MAX_PROCESSES];
 uint8_t current_process = 0;
@@ -34,6 +37,20 @@ int nvm_create_process(uint8_t* bytecode, uint32_t size, uint16_t initial_caps[]
             processes[i].pid = i;
             processes[i].caps_count = 0;
             processes[i].fp = -1;
+            processes[i].blocked = false;
+            processes[i].wakeup_reason = 0;
+
+            // Allocate heap
+            processes[i].heap = (uint8_t*)kmalloc(HEAP_SIZE);
+            if (!processes[i].heap) {
+                LOG_WARN("Failed to allocate heap for process %d\n", i);
+                return -1;
+            }
+            processes[i].heap_size = HEAP_SIZE;
+            // Zero out the heap
+            for (uint32_t j = 0; j < HEAP_SIZE; j++) {
+                processes[i].heap[j] = 0;
+            }
 
             // Initializing capabilities
             for(int j = 0; j < caps_count && j < MAX_CAPS; j++) {
@@ -81,6 +98,19 @@ int nvm_create_process_with_stack(uint8_t* bytecode, uint32_t size,
             processes[i].blocked = false;
             processes[i].wakeup_reason = 0;
             processes[i].fp = -1;
+
+            // Allocate heap
+            processes[i].heap = (uint8_t*)kmalloc(HEAP_SIZE);
+            if (!processes[i].heap) {
+                LOG_WARN("Failed to allocate heap for process %d\n", i);
+                return -1;
+            }
+            processes[i].heap_size = HEAP_SIZE;
+            
+            // Zero out the heap
+            for (uint32_t j = 0; j < HEAP_SIZE; j++) {
+                processes[i].heap[j] = 0;
+            }
 
             for(int j = 0; j < stack_count; j++) {
                 processes[i].stack[j] = initial_stack_values[j];
@@ -264,6 +294,9 @@ void nvm_init_instruction_table(void) {
     instruction_table[0x44] = handle_load_abs;
     instruction_table[0x45] = handle_store_abs;
     
+    instruction_table[0x46] = handle_load_heap;
+    instruction_table[0x47] = handle_store_heap;
+    
     instruction_table[0x50] = handle_syscall;
     instruction_table[0x51] = handle_break;
     
@@ -285,6 +318,8 @@ void nvm_init() {
         processes[i].exit_code = 0;
         processes[i].caps_count = 0;
         processes[i].fp = -1;
+        processes[i].heap = NULL;
+        processes[i].heap_size = 0;
     }
 
     nvm_init_instruction_table();

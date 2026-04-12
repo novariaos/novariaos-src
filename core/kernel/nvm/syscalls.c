@@ -10,6 +10,7 @@
 #include <core/kernel/kstd.h>
 #include <core/fs/procfs.h>
 #include <core/kernel/tty.h>
+#include <log.h>
 
 typedef struct {
     uint16_t recipient;
@@ -35,6 +36,10 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
             procfs_unregister(proc->pid);
             if (proc->bytecode) {
                 proc->bytecode = NULL;
+            }
+            if (proc->heap) {
+                kfree(proc->heap);
+                proc->heap = NULL;
             }
             if(proc->sp > 0) proc->sp--;
             break;
@@ -243,6 +248,10 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
         }
 
         case SYS_READ: {
+            // SYS_READ - read from fd and store in heap
+            // Stack: [fd] (top)
+            // Returns: offset in heap where string was stored, or -1 on error
+            
             if (!caps_has_capability(proc, CAP_FS_READ)) {
                 result = -1;
                 break;
@@ -258,19 +267,46 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
             
             if (fd < 0) {
                 result = -1;
-            } else {
-                char buffer;
-                size_t bytes = vfs_readfd(fd, &buffer, 1);
+                break;
+            }
+            
+            static uint32_t next_offset = 0;
+
+            uint32_t offset = next_offset;
+            uint32_t current_pos = offset;
+            
+            // Read until EOF or until we hit heap limit
+            while (current_pos < proc->heap_size - 1) {
+                char ch;
+                size_t bytes_read = vfs_readfd(fd, &ch, 1);
                 
-                if (bytes == 1) {
-                    result = (unsigned char)buffer;
-                } else if (bytes == 0) {
-                    result = 0;
-                } else {
-                    result = -1;
+                if (bytes_read != 1) {
+                    // EOF or error
+                    break;
+                }
+                
+                proc->heap[current_pos] = (uint8_t)ch;
+                current_pos++;
+                
+                if (ch == '\0') {
+                    // Found null terminator
+                    break;
                 }
             }
 
+            if (current_pos < proc->heap_size) {
+                proc->heap[current_pos] = '\0';
+                current_pos++;
+            } else {
+                LOG_WARN("process %d: Heap overflow in SYS_READ\n", proc->pid);
+                result = -1;
+                break;
+            }
+            
+            next_offset = current_pos;
+
+            result = offset;
+            
             proc->stack[proc->sp] = result;
             proc->sp++;
             break;
@@ -287,22 +323,52 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
                 break;
             }
             
+            int32_t offset = proc->stack[proc->sp - 1];  // offset on top
             int32_t fd = proc->stack[proc->sp - 2];
-            int32_t byte_val = proc->stack[proc->sp - 1];
             proc->sp -= 2;
             
-            if (fd < 0) {
+            if (fd < 0 || offset < 0 || offset >= (int32_t)proc->heap_size) {
                 result = -1;
-            } else if (fd == 1 || fd == 2) {
-                char ch = (char)(byte_val & 0xFF);
-                char buf[2] = {ch, '\0'};
-                tty_puts(buf);
-                result = 1;
-            } else {
-                char ch = (char)(byte_val & 0xFF);
-                result = vfs_writefd(fd, &ch, 1);
+                break;
+            }
+
+            uint32_t bytes_written = 0;
+            uint32_t current_offset = offset;
+            
+            while (current_offset < proc->heap_size) {
+                char ch = (char)proc->heap[current_offset];
+                
+                if (ch == '\0') {
+                    break;
+                }
+                
+                size_t written;
+                if (fd == 1 || fd == 2) {
+                    // stdout/stderr
+                    char buf[2] = {ch, '\0'};
+                    tty_puts(buf);
+                    written = 1;
+                } else {
+                    written = vfs_writefd(fd, &ch, 1);
+                }
+                
+                if (written != 1) {
+                    // Write error
+                    if (bytes_written == 0) {
+                        result = -1;
+                    } else {
+                        result = bytes_written;
+                    }
+                    goto write_done;
+                }
+                
+                bytes_written++;
+                current_offset++;
             }
             
+            result = bytes_written;
+            
+        write_done:
             proc->stack[proc->sp] = result;
             proc->sp++;
             break;
@@ -466,6 +532,11 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
             
             if (proc->bytecode) {
                 proc->bytecode = NULL;
+            }
+            
+            if (proc->heap) {
+                kfree(proc->heap);
+                proc->heap = NULL;
             }
             
             result = -1;

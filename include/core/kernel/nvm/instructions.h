@@ -1,7 +1,12 @@
-#ifndef NVM_INSTRUCTION_H
-#define NVM_INSTRUCTION_H
+// SPDX-License-Identifier: GPL-3.0-only
+
+#ifndef INSTRUCTIONS_H
+#define INSTRUCTIONS_H
 
 #include <core/kernel/nvm/nvm.h>
+#include <stdbool.h>
+
+typedef bool (*instruction_handler_t)(nvm_process_t*);
 
 // Stack operations
 bool handle_halt(nvm_process_t* proc);
@@ -27,7 +32,7 @@ bool handle_neq(nvm_process_t* proc);
 bool handle_gt(nvm_process_t* proc);
 bool handle_lt(nvm_process_t* proc);
 
-// Flow control operations
+// Flow control
 bool handle_jmp(nvm_process_t* proc);
 bool handle_jz(nvm_process_t* proc);
 bool handle_jnz(nvm_process_t* proc);
@@ -43,12 +48,14 @@ bool handle_load_rel(nvm_process_t* proc);
 bool handle_store_rel(nvm_process_t* proc);
 bool handle_load_abs(nvm_process_t* proc);
 bool handle_store_abs(nvm_process_t* proc);
+bool handle_load_heap(nvm_process_t* proc);
+bool handle_store_heap(nvm_process_t* proc);
 
-// System operations
+// System
 bool handle_syscall(nvm_process_t* proc);
 bool handle_break(nvm_process_t* proc);
 
-// Bitwise
+// Bitwise operations
 bool handle_and(nvm_process_t* proc);
 bool handle_or(nvm_process_t* proc);
 bool handle_xor(nvm_process_t* proc);
@@ -57,4 +64,4 @@ bool handle_shl(nvm_process_t* proc);
 bool handle_shr(nvm_process_t* proc);
 bool handle_sar(nvm_process_t* proc);
 
-#endif // NVM_INSTRUCTION_H
+#endif
