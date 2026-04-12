@@ -20,7 +20,7 @@ variables:
 
 targets:
   all:
-    deps: [iso]
+    deps: [kernel.bin, iso]
 
   prepare:
     deps: []
@@ -367,7 +367,7 @@ targets:
       - "./tools/nvma/nvma.bin samples/test_cdrom.asm apps/test_cdrom.bin"
 
   iso:
-    deps: [prepare, kernel.bin]
+    deps: []
     cmds:
       - "cp limine/limine-bios-cd.bin ${BUILD_DIR}/boot/"
       - "xorriso -as mkisofs -quiet -iso-level 3 -o ${BUILD_DIR}/boot/rootfs.img rootfs/"
