@@ -4,6 +4,7 @@
 #include <core/drivers/serial.h>
 #include <core/kernel/nvm/nvm.h>
 #include <core/kernel/nvm/caps.h>
+#include <core/kernel/mem/allocator.h>
 #include <core/kernel/nvm/instructions.h>
 #include <core/kernel/kstd.h>
 #include <log.h>
@@ -106,7 +107,7 @@ int nvm_create_process_with_stack(uint8_t* bytecode, uint32_t size,
                 return -1;
             }
             processes[i].heap_size = HEAP_SIZE;
-            
+
             // Zero out the heap
             for (uint32_t j = 0; j < HEAP_SIZE; j++) {
                 processes[i].heap[j] = 0;
@@ -115,10 +116,10 @@ int nvm_create_process_with_stack(uint8_t* bytecode, uint32_t size,
             for(int j = 0; j < stack_count; j++) {
                 processes[i].stack[j] = initial_stack_values[j];
             }
-            
+
             if(stack_count > 0) {
                 int argc = initial_stack_values[0];
-                
+
                 if(argc > 0) {
                     int argv_pointers_start = 1;
                     int strings_start = 1 + argc;
@@ -128,7 +129,7 @@ int nvm_create_process_with_stack(uint8_t* bytecode, uint32_t size,
                         if(string_pointer >= 0 && string_pointer < stack_count) {
                             int str_start = string_pointer;
                             int str_end = str_start;
-                            
+
                             while(str_end < stack_count && initial_stack_values[str_end] != 0) {
                                 str_end++;
                             }
@@ -143,7 +144,7 @@ int nvm_create_process_with_stack(uint8_t* bytecode, uint32_t size,
                     }
                 }
             }
-            
+
             processes[i].sp = stack_count;
 
             // Initializing capabilities
@@ -174,13 +175,13 @@ bool nvm_execute_instruction(nvm_process_t* proc) {
         proc->active = false;
         return false;
     }
-    
+
     uint8_t opcode = proc->bytecode[proc->ip++];
-    
+
     if(instruction_table[opcode] != NULL) {
         return instruction_table[opcode](proc);
     }
-    
+
     return true;
 }
 
@@ -190,7 +191,7 @@ void nvm_scheduler_tick() {
     if(timer_ticks % TIME_SLICE_MS != 0) {
         return;
     }
-    
+
     uint8_t start = current_process;
     uint8_t original = current_process;
 
@@ -200,17 +201,17 @@ void nvm_scheduler_tick() {
             break;
         }
     } while(current_process != start);
-    
+
     if(processes[current_process].active && !processes[current_process].blocked) {
         for(int i = 0; i < 5000; i++) {
-            if (processes[current_process].ip < processes[current_process].size && 
-                processes[current_process].active && 
+            if (processes[current_process].ip < processes[current_process].size &&
+                processes[current_process].active &&
                 !processes[current_process].blocked) {
                 if(!nvm_execute_instruction(&processes[current_process])) {
                     break; // Stop if instruction returns false (halt, error, etc)
                 }
             } else {
-                if(processes[current_process].ip >= processes[current_process].size && 
+                if(processes[current_process].ip >= processes[current_process].size &&
                    processes[current_process].active) {
                     processes[current_process].active = false;
                     processes[current_process].exit_code = 0;
@@ -256,50 +257,50 @@ void nvm_init_instruction_table(void) {
     for(int i = 0; i < 256; i++) {
         instruction_table[i] = NULL;
     }
-    
+
     instruction_table[0x00] = handle_halt;
     instruction_table[0x01] = handle_nop;
     instruction_table[0x02] = handle_push;
     instruction_table[0x04] = handle_pop;
     instruction_table[0x05] = handle_dup;
     instruction_table[0x06] = handle_swap;
-    
+
     instruction_table[0x10] = handle_add;
     instruction_table[0x11] = handle_sub;
     instruction_table[0x12] = handle_mul;
     instruction_table[0x13] = handle_div;
     instruction_table[0x14] = handle_mod;
-    
+
     instruction_table[0x20] = handle_cmp;
     instruction_table[0x21] = handle_eq;
     instruction_table[0x22] = handle_neq;
     instruction_table[0x23] = handle_gt;
     instruction_table[0x24] = handle_lt;
-    
+
     instruction_table[0x30] = handle_jmp;
     instruction_table[0x31] = handle_jz;
     instruction_table[0x32] = handle_jnz;
     instruction_table[0x33] = handle_call;
     instruction_table[0x34] = handle_ret;
-    
+
     instruction_table[0x35] = handle_enter;
     instruction_table[0x36] = handle_leave;
     instruction_table[0x37] = handle_load_arg;
     instruction_table[0x38] = handle_store_arg;
-    
+
     instruction_table[0x40] = handle_load;
     instruction_table[0x41] = handle_store;
     instruction_table[0x42] = handle_load_rel;
     instruction_table[0x43] = handle_store_rel;
     instruction_table[0x44] = handle_load_abs;
     instruction_table[0x45] = handle_store_abs;
-    
+
     instruction_table[0x46] = handle_load_heap;
     instruction_table[0x47] = handle_store_heap;
-    
+
     instruction_table[0x50] = handle_syscall;
     instruction_table[0x51] = handle_break;
-    
+
     instruction_table[0x60] = handle_and;
     instruction_table[0x61] = handle_or;
     instruction_table[0x62] = handle_xor;
