@@ -465,16 +465,6 @@ static void execute_command(const char* command) {
                     procfs_set_args(pid, NULL, 0);
                 }
                 
-                kprint("Started process ", 7);
-                char pid_str[8];
-                itoa(pid, pid_str, 10);
-                kprint(pid_str, 11);
-                kprint(" with ", 7);
-                char argc_str[8];
-                itoa(argc, argc_str, 10);
-                kprint(argc_str, 11);
-                kprint(" arguments\n", 7);
-                
                 return;
             } else {
                 kprint("Error: Failed to read program file\n", 12);
