@@ -211,34 +211,35 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
                 break;
             }
 
-            int start_pos = proc->sp;
-            int null_pos = -1;
+            int32_t offset = proc->stack[proc->sp - 1];
+            proc->sp--;
             
-            for (int i = proc->sp - 1; i >= 0; i--) {
-                if ((proc->stack[i] & 0xFF) == 0) {
-                    null_pos = i;
-                    break;
-                }
-            }
-            
-            if (null_pos == -1) {
+            if (offset < 0 || offset >= (int32_t)proc->heap_size) {
                 result = -1;
                 break;
             }
             
             char filename[MAX_FILENAME];
             int pos = 0;
-       
-            for (int i = null_pos + 1; i < start_pos && pos < MAX_FILENAME - 1; i++) {
-                char ch = proc->stack[i] & 0xFF;
+            uint32_t current_offset = offset;
+            
+            while (current_offset < proc->heap_size && pos < MAX_FILENAME - 1) {
+                char ch = (char)proc->heap[current_offset];
+                if (ch == '\0') {
+                    break;
+                }
                 filename[pos++] = ch;
+                current_offset++;
             }
             
             filename[pos] = '\0';
-
-            proc->sp = null_pos;
             
-            int fd = vfs_open(filename, VFS_READ | VFS_WRITE);
+            if (pos == 0) {
+                result = -1;
+                break;
+            }
+            
+            int fd = vfs_open(filename, VFS_READ);
             
             proc->stack[proc->sp] = fd;
             proc->sp++;
@@ -248,10 +249,6 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
         }
 
         case SYS_READ: {
-            // SYS_READ - read from fd and store in heap
-            // Stack: [fd] (top)
-            // Returns: offset in heap where string was stored, or -1 on error
-            
             if (!caps_has_capability(proc, CAP_FS_READ)) {
                 result = -1;
                 break;
@@ -271,17 +268,14 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
             }
             
             static uint32_t next_offset = 0;
-
             uint32_t offset = next_offset;
             uint32_t current_pos = offset;
             
-            // Read until EOF or until we hit heap limit
             while (current_pos < proc->heap_size - 1) {
                 char ch;
                 size_t bytes_read = vfs_readfd(fd, &ch, 1);
                 
                 if (bytes_read != 1) {
-                    // EOF or error
                     break;
                 }
                 
@@ -289,7 +283,6 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
                 current_pos++;
                 
                 if (ch == '\0') {
-                    // Found null terminator
                     break;
                 }
             }
@@ -304,7 +297,6 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
             }
             
             next_offset = current_pos;
-
             result = offset;
             
             proc->stack[proc->sp] = result;
@@ -323,7 +315,7 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
                 break;
             }
             
-            int32_t offset = proc->stack[proc->sp - 1];  // offset on top
+            int32_t offset = proc->stack[proc->sp - 1];
             int32_t fd = proc->stack[proc->sp - 2];
             proc->sp -= 2;
             
@@ -344,7 +336,6 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
                 
                 size_t written;
                 if (fd == 1 || fd == 2) {
-                    // stdout/stderr
                     char buf[2] = {ch, '\0'};
                     tty_puts(buf);
                     written = 1;
@@ -353,7 +344,6 @@ int32_t syscall_handler(uint8_t syscall_id, nvm_process_t* proc) {
                 }
                 
                 if (written != 1) {
-                    // Write error
                     if (bytes_written == 0) {
                         result = -1;
                     } else {
