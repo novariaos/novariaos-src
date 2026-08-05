@@ -31,6 +31,16 @@ int register_block_device(const char* name, uint32_t block_size, uint64_t total_
     return -ENOMEM;
 }
 
+void unregister_block_device(const char* name) {
+    for (int i = 0; i < MAX_BLOCK_DEVICES; i++) {
+        if (block_devices[i].used && strcmp(block_devices[i].name, name) == 0) {
+            block_devices[i].used = false;
+            LOG_INFO("Unregistered block device '%s'.\n", name);
+            return;
+        }
+    }
+}
+
 block_device_t* find_block_device(const char* name) {
     for (int i = 0; i < MAX_BLOCK_DEVICES; i++) {
         if (block_devices[i].used && strcmp(block_devices[i].name, name) == 0) {

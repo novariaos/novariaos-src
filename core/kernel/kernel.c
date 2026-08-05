@@ -162,7 +162,7 @@ static void init_filesystems(void) {
 
     ahci_init();
     kprint(":: AHCI controller initialized\n", 7);
-    
+
     fat32_init();
     kprint(":: FAT32 filesystem initialized\n", 7);
     

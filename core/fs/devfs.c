@@ -319,6 +319,13 @@ void devfs_register_device(const char* name, vfs_dev_read_t read_fn,
     }
 }
 
+void devfs_unregister_device(const char* name) {
+    devfs_device_t* dev = devfs_find_device(name);
+    if (dev) {
+        dev->used = false;
+    }
+}
+
 void devfs_init(void) {
     for (int i = 0; i < MAX_DEVICES; i++) {
         devices[i].used = false;

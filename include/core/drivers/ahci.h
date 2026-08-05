@@ -28,12 +28,16 @@
 #define HBA_PxCMD_CR          0x8000
 
 #define HBA_PxIS_TFES         (1 << 30)
+#define HBA_PxIS_PCS          (1 << 6)
+#define HBA_PxIS_PRCS         (1 << 22)
 
 #define HBA_PxIE_DHRE         (1 << 0)
 #define HBA_PxIE_PSE          (1 << 1)
 #define HBA_PxIE_DSE          (1 << 2)
 #define HBA_PxIE_SDBE         (1 << 3)
 #define HBA_PxIE_TFEE         (1 << 30)
+#define HBA_PxIE_PCE          (1 << 6)
+#define HBA_PxIE_PRCE         (1 << 22)
 
 #define HBA_GHC_AE            (1U << 31)
 #define HBA_GHC_IE            (1 << 1)
@@ -154,5 +158,6 @@ typedef struct {
 } hba_cmd_tbl_t;
 
 void ahci_init(void);
+void ahci_poll_hotplug(void);
 
 #endif
