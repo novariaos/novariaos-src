@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include <core/drivers/ahci.h>
+#include <core/drivers/msix.h>
+#include <core/arch/apic.h>
+#include <core/arch/idt.h>
 #include <core/fs/block.h>
 #include <core/kernel/mem/allocator.h>
 #include <core/arch/io.h>
@@ -10,7 +13,13 @@
 #include <stdbool.h>
 #include <string.h>
 
+#define AHCI_IRQ_VECTOR 0x22
+
 static hba_mem_t* abar = NULL;
+static uint8_t ahci_pci_bus  = 0;
+static uint8_t ahci_pci_slot = 0;
+static uint8_t ahci_pci_func = 0;
+static bool    ahci_use_irq  = false;
 
 static inline uint64_t virt_to_phys(void* virt) {
     return (uint64_t)(uintptr_t)virt - get_hhdm_offset();
@@ -27,6 +36,7 @@ typedef struct {
     hba_cmd_tbl_t*   cmd_tbl[AHCI_CMD_SLOTS];
     uint64_t         sector_count;
     int              port_num;
+    volatile bool    irq_pending;
 } ahci_port_t;
 
 #define AHCI_MAX_DEVICES 8
@@ -42,6 +52,28 @@ static inline uint32_t mmio_read32(volatile uint32_t* addr) {
     uint32_t val = *addr;
     __asm__ volatile("" ::: "memory");
     return val;
+}
+
+static void __attribute__((interrupt, target("general-regs-only")))
+ahci_irq_handler(interrupt_frame_t *frame) {
+    (void)frame;
+
+    if (abar) {
+        uint32_t is = mmio_read32(&abar->is);
+
+        for (int i = 0; i < ahci_device_count; i++) {
+            ahci_port_t* dev = &ahci_devices[i];
+            if (is & (1U << dev->port_num)) {
+                uint32_t pis = mmio_read32(&dev->port->is);
+                mmio_write32(&dev->port->is, pis);
+                dev->irq_pending = true;
+            }
+        }
+
+        mmio_write32(&abar->is, is);
+    }
+
+    apic_eoi();
 }
 
 static uint32_t pci_read32(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset) {
@@ -75,7 +107,12 @@ static uint64_t pci_find_ahci(void) {
 
                     uint32_t cmd = pci_read32(bus, slot, func, 0x04);
                     cmd |= (1 << 1) | (1 << 2);
+                    cmd &= ~(1U << 10);
                     pci_write32(bus, slot, func, 0x04, cmd);
+
+                    ahci_pci_bus  = (uint8_t)bus;
+                    ahci_pci_slot = slot;
+                    ahci_pci_func = func;
 
                     return (uint64_t)(bar5 & 0xFFFFF000);
                 }
@@ -175,19 +212,36 @@ static void ahci_port_rebase(ahci_port_t* dev) {
     mmio_write32(&port->serr, 0xFFFFFFFF);
     mmio_write32(&port->is, 0xFFFFFFFF);
 
+    if (ahci_use_irq) {
+        mmio_write32(&port->ie, HBA_PxIE_DHRE | HBA_PxIE_PSE | HBA_PxIE_DSE |
+                                 HBA_PxIE_SDBE | HBA_PxIE_TFEE);
+    }
+
     ahci_start_cmd(port);
 }
 
 static int ahci_issue_cmd(ahci_port_t* dev, int slot) {
     hba_port_t* port = dev->port;
 
+    if (ahci_use_irq)
+        dev->irq_pending = false;
+
     mmio_write32(&port->ci, 1 << slot);
 
     for (int spin = 0; spin < 1000000; spin++) {
-        if (!(mmio_read32(&port->ci) & (1 << slot)))
-            return 0;
-        if (mmio_read32(&port->is) & HBA_PxIS_TFES)
-            return -1;
+        bool ready = ahci_use_irq ? dev->irq_pending : true;
+
+        if (ready) {
+            if (ahci_use_irq)
+                dev->irq_pending = false;
+
+            if (!(mmio_read32(&port->ci) & (1 << slot)))
+                return 0;
+            if (mmio_read32(&port->is) & HBA_PxIS_TFES)
+                return -1;
+        }
+
+        for (volatile int i = 0; i < 1000; i++);
     }
 
     return -1;
@@ -338,6 +392,22 @@ void ahci_init(void) {
     LOG_DEBUG("AHCI: Controller found, version %d.%d\n",
               (vs >> 16) & 0xFFFF, vs & 0xFFFF);
 
+    msix_info_t msix;
+    if (msix_find(ahci_pci_bus, ahci_pci_slot, ahci_pci_func, &msix)) {
+        idt_install_handler(AHCI_IRQ_VECTOR, ahci_irq_handler);
+        if (msix_setup(&msix, 0, AHCI_IRQ_VECTOR)) {
+            ahci_use_irq = true;
+            ghc = mmio_read32(&abar->ghc);
+            ghc |= HBA_GHC_IE;
+            mmio_write32(&abar->ghc, ghc);
+            LOG_INFO("AHCI: MSI-X enabled, vector 0x%x\n", AHCI_IRQ_VECTOR);
+        } else {
+            LOG_ERROR("AHCI: MSI-X setup failed, using polling\n");
+        }
+    } else {
+        LOG_INFO("AHCI: MSI-X not available, using polling\n");
+    }
+
     uint32_t pi = mmio_read32(&abar->pi);
     int dev_idx = 0;
 
@@ -352,13 +422,16 @@ void ahci_init(void) {
             continue;
 
         ahci_port_t* ap = &ahci_devices[dev_idx];
-        ap->port     = port;
-        ap->port_num = i;
+        ap->port        = port;
+        ap->port_num    = i;
+        ap->irq_pending = false;
+        ahci_device_count = dev_idx + 1;
 
         ahci_port_rebase(ap);
 
         if (ahci_identify(ap) < 0) {
             LOG_WARN("AHCI: Failed to identify port %d\n", i);
+            ahci_device_count = dev_idx;
             continue;
         }
 
