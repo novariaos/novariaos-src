@@ -31,14 +31,13 @@ typedef struct block_device {
 
 void block_init(void);
 
-// Functions for drivers to register/unregister themselves
-int register_block_device(const char* name, uint32_t block_size, uint64_t total_blocks, 
+int register_block_device(const char* name, uint32_t block_size, uint64_t total_blocks,
                            block_device_ops_t* ops, void* private_data);
+void unregister_block_device(const char* name);
 
-// Functions for filesystems or VFS to interact with block devices
 block_device_t* find_block_device(const char* name);
 
-// For devfs to list devices
+
 block_device_t* get_block_devices(void);
 
 

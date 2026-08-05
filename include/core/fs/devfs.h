@@ -6,5 +6,6 @@
 void devfs_init(void);
 void devfs_register_device(const char* name, vfs_dev_read_t read_fn,
                            vfs_dev_write_t write_fn, void* data);
+void devfs_unregister_device(const char* name);
 
 #endif

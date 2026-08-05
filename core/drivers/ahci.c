@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include <core/drivers/ahci.h>
+#include <core/drivers/msix.h>
+#include <core/arch/apic.h>
+#include <core/arch/idt.h>
+#include <core/arch/work_queue.h>
 #include <core/fs/block.h>
+#include <core/fs/block_dev_vfs.h>
+#include <core/fs/devfs.h>
+#include <core/fs/vfs.h>
 #include <core/kernel/mem/allocator.h>
 #include <core/arch/io.h>
 #include <log.h>
@@ -10,7 +17,13 @@
 #include <stdbool.h>
 #include <string.h>
 
+#define AHCI_IRQ_VECTOR 0x22
+
 static hba_mem_t* abar = NULL;
+static uint8_t ahci_pci_bus  = 0;
+static uint8_t ahci_pci_slot = 0;
+static uint8_t ahci_pci_func = 0;
+static bool    ahci_use_irq  = false;
 
 static inline uint64_t virt_to_phys(void* virt) {
     return (uint64_t)(uintptr_t)virt - get_hhdm_offset();
@@ -27,11 +40,16 @@ typedef struct {
     hba_cmd_tbl_t*   cmd_tbl[AHCI_CMD_SLOTS];
     uint64_t         sector_count;
     int              port_num;
+    volatile bool    irq_pending;
+    bool             allocated;
+    bool             active;
+    char             name[8];
 } ahci_port_t;
 
 #define AHCI_MAX_DEVICES 8
 static ahci_port_t ahci_devices[AHCI_MAX_DEVICES];
 static int ahci_device_count = 0;
+static uint32_t ahci_pi_mask = 0;
 
 static inline void mmio_write32(volatile uint32_t* addr, uint32_t val) {
     *addr = val;
@@ -42,6 +60,14 @@ static inline uint32_t mmio_read32(volatile uint32_t* addr) {
     uint32_t val = *addr;
     __asm__ volatile("" ::: "memory");
     return val;
+}
+
+static ahci_port_t* ahci_slot_for_port(int port_num) {
+    for (int i = 0; i < ahci_device_count; i++) {
+        if (ahci_devices[i].allocated && ahci_devices[i].port_num == port_num)
+            return &ahci_devices[i];
+    }
+    return NULL;
 }
 
 static uint32_t pci_read32(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset) {
@@ -75,7 +101,12 @@ static uint64_t pci_find_ahci(void) {
 
                     uint32_t cmd = pci_read32(bus, slot, func, 0x04);
                     cmd |= (1 << 1) | (1 << 2);
+                    cmd &= ~(1U << 10);
                     pci_write32(bus, slot, func, 0x04, cmd);
+
+                    ahci_pci_bus  = (uint8_t)bus;
+                    ahci_pci_slot = slot;
+                    ahci_pci_func = func;
 
                     return (uint64_t)(bar5 & 0xFFFFF000);
                 }
@@ -181,13 +212,25 @@ static void ahci_port_rebase(ahci_port_t* dev) {
 static int ahci_issue_cmd(ahci_port_t* dev, int slot) {
     hba_port_t* port = dev->port;
 
+    if (ahci_use_irq)
+        dev->irq_pending = false;
+
     mmio_write32(&port->ci, 1 << slot);
 
     for (int spin = 0; spin < 1000000; spin++) {
-        if (!(mmio_read32(&port->ci) & (1 << slot)))
-            return 0;
-        if (mmio_read32(&port->is) & HBA_PxIS_TFES)
-            return -1;
+        bool ready = ahci_use_irq ? dev->irq_pending : true;
+
+        if (ready) {
+            if (ahci_use_irq)
+                dev->irq_pending = false;
+
+            if (!(mmio_read32(&port->ci) & (1 << slot)))
+                return 0;
+            if (mmio_read32(&port->is) & HBA_PxIS_TFES)
+                return -1;
+        }
+
+        for (volatile int i = 0; i < 1000; i++);
     }
 
     return -1;
@@ -321,6 +364,126 @@ static int ahci_write_blocks(struct block_device* dev, uint64_t lba, size_t coun
     return ahci_rw(ap, lba, count, (void*)buf, true);
 }
 
+static void ahci_scan_port_for_hotplug(int port_num) {
+    if (!abar)
+        return;
+
+    hba_port_t* port = &abar->ports[port_num];
+    int type = ahci_port_type(port);
+    ahci_port_t* ap = ahci_slot_for_port(port_num);
+
+    if (type == AHCI_DEV_SATA) {
+        if (ap && ap->active)
+            return;
+
+        for (volatile int i = 0; i < 20000; i++);
+        type = ahci_port_type(port);
+        if (type != AHCI_DEV_SATA)
+            return;
+
+        if (!ap) {
+            if (ahci_device_count >= AHCI_MAX_DEVICES) {
+                LOG_WARN("AHCI: hot-plug on port %d ignored, device table full\n", port_num);
+                return;
+            }
+
+            ap = &ahci_devices[ahci_device_count];
+
+            char name[8];
+            name[0] = 's'; name[1] = 'd';
+            name[2] = 'a' + (char)(ap - ahci_devices);
+            name[3] = '\0';
+            memcpy(ap->name, name, sizeof(name));
+
+            ap->allocated = true;
+            ahci_device_count++;
+        }
+
+        ap->port        = port;
+        ap->port_num    = port_num;
+        ap->irq_pending = false;
+
+        ahci_port_rebase(ap);
+
+        if (ahci_identify(ap) < 0) {
+            LOG_WARN("AHCI: hot-plug identify failed on port %d\n", port_num);
+            return;
+        }
+
+        block_device_ops_t ops = {
+            .read_blocks  = ahci_read_blocks,
+            .write_blocks = ahci_write_blocks,
+        };
+
+        register_block_device(ap->name, AHCI_SECTOR_SIZE, ap->sector_count, &ops, ap);
+        block_dev_vfs_register_one(find_block_device(ap->name));
+        ap->active = true;
+
+        LOG_INFO("AHCI: hot-plug connect on port %d -> %s (%llu sectors)\n",
+                  port_num, ap->name, ap->sector_count);
+    } else {
+        if (!ap || !ap->active)
+            return;
+
+        LOG_INFO("AHCI: hot-plug disconnect on port %d (%s)\n", port_num, ap->name);
+
+        char path[16];
+        strcpy(path, "/dev/");
+        strcat(path, ap->name);
+
+        vfs_delete(path);
+        devfs_unregister_device(ap->name);
+        unregister_block_device(ap->name);
+
+        ap->active = false;
+    }
+}
+
+static void ahci_handle_hotplug(void* arg) {
+    ahci_scan_port_for_hotplug((int)(uintptr_t)arg);
+}
+
+void ahci_poll_hotplug(void) {
+    if (!abar)
+        return;
+
+    for (int i = 0; i < AHCI_MAX_PORTS; i++) {
+        if (ahci_pi_mask & (1U << i))
+            ahci_scan_port_for_hotplug(i);
+    }
+}
+
+static void __attribute__((interrupt, target("general-regs-only")))
+ahci_irq_handler(interrupt_frame_t *frame) {
+    (void)frame;
+
+    if (abar) {
+        uint32_t is = mmio_read32(&abar->is);
+
+        for (int i = 0; i < AHCI_MAX_PORTS; i++) {
+            if (!(is & (1U << i)) || !(ahci_pi_mask & (1U << i)))
+                continue;
+
+            hba_port_t* port = &abar->ports[i];
+            uint32_t pis = mmio_read32(&port->is);
+            mmio_write32(&port->is, pis);
+
+            if (pis & (HBA_PxIS_PCS | HBA_PxIS_PRCS)) {
+                mmio_write32(&port->serr, 0xFFFFFFFF);
+                wq_submit_any(ahci_handle_hotplug, (void*)(uintptr_t)i);
+            }
+
+            ahci_port_t* dev = ahci_slot_for_port(i);
+            if (dev)
+                dev->irq_pending = true;
+        }
+
+        mmio_write32(&abar->is, is);
+    }
+
+    apic_eoi();
+}
+
 void ahci_init(void) {
     uint64_t bar5 = pci_find_ahci();
     if (!bar5) {
@@ -338,27 +501,58 @@ void ahci_init(void) {
     LOG_DEBUG("AHCI: Controller found, version %d.%d\n",
               (vs >> 16) & 0xFFFF, vs & 0xFFFF);
 
+    msix_info_t msix;
+    if (msix_find(ahci_pci_bus, ahci_pci_slot, ahci_pci_func, &msix)) {
+        idt_install_handler(AHCI_IRQ_VECTOR, ahci_irq_handler);
+        if (msix_setup(&msix, 0, AHCI_IRQ_VECTOR)) {
+            ahci_use_irq = true;
+            ghc = mmio_read32(&abar->ghc);
+            ghc |= HBA_GHC_IE;
+            mmio_write32(&abar->ghc, ghc);
+            LOG_INFO("AHCI: MSI-X enabled, vector 0x%x\n", AHCI_IRQ_VECTOR);
+        } else {
+            LOG_ERROR("AHCI: MSI-X setup failed, using polling\n");
+        }
+    } else {
+        LOG_INFO("AHCI: MSI-X not available, using polling\n");
+    }
+
     uint32_t pi = mmio_read32(&abar->pi);
+    ahci_pi_mask = pi;
     int dev_idx = 0;
 
-    for (int i = 0; i < AHCI_MAX_PORTS && dev_idx < AHCI_MAX_DEVICES; i++) {
+    for (int i = 0; i < AHCI_MAX_PORTS; i++) {
         if (!(pi & (1 << i)))
             continue;
 
         hba_port_t* port = &abar->ports[i];
+
+        if (ahci_use_irq) {
+            mmio_write32(&port->serr, 0xFFFFFFFF);
+            mmio_write32(&port->is, 0xFFFFFFFF);
+            mmio_write32(&port->ie, HBA_PxIE_DHRE | HBA_PxIE_PSE | HBA_PxIE_DSE |
+                                     HBA_PxIE_SDBE | HBA_PxIE_TFEE |
+                                     HBA_PxIE_PCE  | HBA_PxIE_PRCE);
+        }
+
         int type = ahci_port_type(port);
 
-        if (type != AHCI_DEV_SATA)
+        if (type != AHCI_DEV_SATA || dev_idx >= AHCI_MAX_DEVICES)
             continue;
 
         ahci_port_t* ap = &ahci_devices[dev_idx];
-        ap->port     = port;
-        ap->port_num = i;
+        ap->port        = port;
+        ap->port_num    = i;
+        ap->irq_pending = false;
+        ap->allocated   = true;
+        ahci_device_count = dev_idx + 1;
 
         ahci_port_rebase(ap);
 
         if (ahci_identify(ap) < 0) {
             LOG_WARN("AHCI: Failed to identify port %d\n", i);
+            ap->allocated = false;
+            ahci_device_count = dev_idx;
             continue;
         }
 
@@ -368,6 +562,8 @@ void ahci_init(void) {
         name[0] = 's'; name[1] = 'd';
         name[2] = 'a' + (char)dev_idx;
         name[3] = '\0';
+        memcpy(ap->name, name, sizeof(name));
+        ap->active = true;
 
         block_device_ops_t ops = {
             .read_blocks  = ahci_read_blocks,
@@ -377,8 +573,6 @@ void ahci_init(void) {
         register_block_device(name, AHCI_SECTOR_SIZE, ap->sector_count, &ops, ap);
         dev_idx++;
     }
-
-    ahci_device_count = dev_idx;
 
     if (dev_idx == 0)
         LOG_DEBUG("AHCI: No SATA devices found\n");

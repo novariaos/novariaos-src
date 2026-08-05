@@ -24,8 +24,8 @@
 - [x] DMA read operations (READ DMA EXT, LBA48)
 - [x] DMA write operations (WRITE DMA EXT, LBA48)
 - [x] Block device registration (sda, sdb, ...)
-- [ ] Interrupt-based I/O (currently uses polling)
-- [ ] Hot-plug support (port change detection)
+- [x] Interrupt-based I/O (MSI-X, polling fallback)
+- [x] Hot-plug support (port change detection)
 - [ ] ATAPI device support
 - [ ] NCQ (Native Command Queuing)
 - [ ] Port multiplier support

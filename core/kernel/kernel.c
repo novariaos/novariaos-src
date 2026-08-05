@@ -159,10 +159,10 @@ static void init_filesystems(void) {
     
     nvme_init();
     kprint(":: NVMe controller initialized\n", 7);
-    
+
     ahci_init();
     kprint(":: AHCI controller initialized\n", 7);
-    
+
     fat32_init();
     kprint(":: FAT32 filesystem initialized\n", 7);
     
