@@ -26,7 +26,7 @@
 - [x] Block device registration (sda, sdb, ...)
 - [x] Interrupt-based I/O (MSI-X, polling fallback)
 - [x] Hot-plug support (port change detection)
-- [ ] ATAPI device support
+- [x] ATAPI device support
 - [ ] NCQ (Native Command Queuing)
 - [ ] Port multiplier support
 - [ ] Error recovery and port reset
