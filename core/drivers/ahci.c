@@ -45,6 +45,7 @@ typedef struct {
     bool             allocated;
     bool             active;
     bool             is_atapi;
+    bool             ncq_supported;
     char             name[8];
 } ahci_port_t;
 
@@ -238,6 +239,34 @@ static int ahci_issue_cmd(ahci_port_t* dev, int slot) {
     return -1;
 }
 
+static int ahci_issue_ncq_cmd(ahci_port_t* dev, int slot) {
+    hba_port_t* port = dev->port;
+
+    if (ahci_use_irq)
+        dev->irq_pending = false;
+
+    mmio_write32(&port->sact, mmio_read32(&port->sact) | (1U << slot));
+    mmio_write32(&port->ci, 1U << slot);
+
+    for (int spin = 0; spin < 1000000; spin++) {
+        bool ready = ahci_use_irq ? dev->irq_pending : true;
+
+        if (ready) {
+            if (ahci_use_irq)
+                dev->irq_pending = false;
+
+            if (!(mmio_read32(&port->sact) & (1U << slot)))
+                return 0;
+            if (mmio_read32(&port->is) & HBA_PxIS_TFES)
+                return -1;
+        }
+
+        for (volatile int i = 0; i < 1000; i++);
+    }
+
+    return -1;
+}
+
 static int ahci_identify(ahci_port_t* dev) {
     hba_port_t* port = dev->port;
 
@@ -285,6 +314,9 @@ static int ahci_identify(ahci_port_t* dev) {
     }
 
     dev->block_size = AHCI_SECTOR_SIZE;
+
+    uint16_t sata_caps = ident_buf[152] | ((uint16_t)ident_buf[153] << 8);
+    dev->ncq_supported = (sata_caps & (1 << 8)) != 0;
 
     kfree(ident_buf);
     return 0;
@@ -435,18 +467,30 @@ static int ahci_rw(ahci_port_t* dev, uint64_t lba, size_t count, void* buf, bool
         memset(fis, 0, sizeof(fis_reg_h2d_t));
         fis->fis_type = FIS_TYPE_REG_H2D;
         fis->c        = 1;
-        fis->command  = write ? ATA_CMD_WRITE_DMA_EX : ATA_CMD_READ_DMA_EX;
-        fis->device   = 1 << 6;
         fis->lba0     = (uint8_t)(lba);
         fis->lba1     = (uint8_t)(lba >> 8);
         fis->lba2     = (uint8_t)(lba >> 16);
         fis->lba3     = (uint8_t)(lba >> 24);
         fis->lba4     = (uint8_t)(lba >> 32);
         fis->lba5     = (uint8_t)(lba >> 40);
-        fis->countl   = (uint8_t)(chunk);
-        fis->counth   = (uint8_t)(chunk >> 8);
 
-        if (ahci_issue_cmd(dev, slot) < 0)
+        int rc;
+        if (dev->ncq_supported) {
+            fis->command  = write ? ATA_CMD_WRITE_FPDMA_QUEUED : ATA_CMD_READ_FPDMA_QUEUED;
+            fis->featurel = (uint8_t)(chunk);
+            fis->featureh = (uint8_t)(chunk >> 8);
+            fis->device   = 1 << 6;
+            fis->countl   = (uint8_t)(slot << 3);
+            rc = ahci_issue_ncq_cmd(dev, slot);
+        } else {
+            fis->command  = write ? ATA_CMD_WRITE_DMA_EX : ATA_CMD_READ_DMA_EX;
+            fis->device   = 1 << 6;
+            fis->countl   = (uint8_t)(chunk);
+            fis->counth   = (uint8_t)(chunk >> 8);
+            rc = ahci_issue_cmd(dev, slot);
+        }
+
+        if (rc < 0)
             return -1;
 
         ptr   += chunk * AHCI_SECTOR_SIZE;
@@ -682,8 +726,6 @@ void ahci_init(void) {
             name[2] = 'a' + (char)ahci_next_index(false);
         }
         name[3] = '\0';
-        memcpy(ap->name, name, sizeof(name));
-        ap->active = true;
 
         ahci_port_t* ap = &ahci_devices[ahci_device_count];
         memcpy(ap->name, name, sizeof(name));
@@ -717,7 +759,8 @@ void ahci_init(void) {
             ops.write_blocks = ahci_write_blocks;
         }
 
-        LOG_DEBUG("AHCI: Port %d — %llu blocks, %u bytes/block\n", i, ap->sector_count, ap->block_size);
+        LOG_DEBUG("AHCI: Port %d — %llu blocks, %u bytes/block, NCQ=%d\n",
+                  i, ap->sector_count, ap->block_size, ap->ncq_supported);
 
         ap->active = true;
         register_block_device(ap->name, ap->block_size, ap->sector_count, &ops, ap);

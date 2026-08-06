@@ -27,7 +27,7 @@
 - [x] Interrupt-based I/O (MSI-X, polling fallback)
 - [x] Hot-plug support (port change detection)
 - [x] ATAPI device support
-- [ ] NCQ (Native Command Queuing)
+- [x] NCQ (Native Command Queuing)
 - [ ] Port multiplier support
 - [ ] Error recovery and port reset
 
