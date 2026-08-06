@@ -682,6 +682,8 @@ void ahci_init(void) {
             name[2] = 'a' + (char)ahci_next_index(false);
         }
         name[3] = '\0';
+        memcpy(ap->name, name, sizeof(name));
+        ap->active = true;
 
         ahci_port_t* ap = &ahci_devices[ahci_device_count];
         memcpy(ap->name, name, sizeof(name));
