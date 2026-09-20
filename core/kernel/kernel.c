@@ -2,8 +2,7 @@
 
 #include <core/kernel/kstd.h>
 #include <core/kernel/mem.h>
-#include <core/kernel/nvm/nvm.h>
-#include <core/kernel/nvm/caps.h>
+#include <core/kernel/rvemu/rvemu.h>
 #include <core/drivers/serial.h>
 #include <core/kernel/vge/fb.h>
 #include <core/kernel/vge/palette.h>
@@ -127,9 +126,9 @@ static void init_keyboard(void) {
     kprint(":: Keyboard controller initialized\n", 7);
 }
 
-static void init_nvm(void) {
-    nvm_init();
-    kprint(":: NVM subsystem initialized\n", 7);
+static void init_rvemu(void) {
+    rvemu_init();
+    kprint(":: RVEMU subsystem initialized\n", 7);
 }
 
 static void init_multiprocessing(void) {
@@ -284,7 +283,7 @@ void kmain() {
     init_apic();
     init_syslog();
     init_keyboard();
-    init_nvm();
+    init_rvemu();
     init_multiprocessing();
     init_timer_subsystem();
     
@@ -305,6 +304,6 @@ void kmain() {
     // Work loop
     while(true) {
         keyboard_getchar();
-        nvm_scheduler_tick();
+        rvemu_tick();
     }
 }

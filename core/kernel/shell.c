@@ -7,8 +7,7 @@
 #include <core/kernel/mem.h>
 #include <core/fs/iso9660.h>
 #include <core/fs/vfs.h>
-#include <core/kernel/nvm/nvm.h>
-#include <core/kernel/nvm/caps.h>
+#include <core/kernel/rvemu/rvemu.h>
 #include <log.h>
 #include <core/arch/work_queue.h>
 #include <core/arch/smp.h>
@@ -372,11 +371,10 @@ static void execute_command(const char* command) {
                     bytecode[i] = (uint8_t)data[i];
                 }
                 
-                int pid = nvm_create_process(bytecode, size,
-                                            (uint16_t[]){CAP_ALL}, 1);
-                
+                int pid = rvemu_create_process_from_elf(bytecode, size);
+                kfree(bytecode);
+
                 if (pid < 0) {
-                    kfree(bytecode);
                     kprint("Error: Failed to create process\n", 12);
                     return;
                 }
@@ -563,7 +561,7 @@ void shell_run(void) {
     for (int j = 0; j < MAX_COMMAND_LENGTH; j++) command[j] = 0;
 
     while (1) {
-        nvm_scheduler_tick();
+        rvemu_tick();
 
         if (needs_prompt) {
             if (should_delay_prompt) {

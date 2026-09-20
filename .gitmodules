@@ -1,7 +1,0 @@
-[submodule "tools/nvma"]
-	path = tools/nvma
-	url = https://github.com/novariaos/nvma
-
-[submodule "tools/nest"]
-	path = tools/nest
-	url = https://github.com/novariaos/nest-lang

@@ -1,1 +1,0 @@
-These programs are manual validation and demonstration programs. They are **not** automated tests. They exist to test syscalls, VM, filesystem, and userspace APIs.

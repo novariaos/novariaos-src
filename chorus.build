@@ -20,7 +20,7 @@ variables:
 
 targets:
   all:
-    deps: [kernel.bin, userspace, iso]
+    deps: [kernel.bin, iso]
 
   prepare:
     deps: []
@@ -46,9 +46,9 @@ targets:
 
             core/kernel/elf/parser, core/kernel/kmodules,
 
-            core/kernel/nvm/nvm, core/kernel/nvm/caps, core/kernel/nvm/instructions/arithmetic, core/kernel/nvm/instructions/bitwise,
-            core/kernel/nvm/instructions/stack, core/kernel/nvm/instructions/flowcontrol,
-            core/kernel/nvm/instructions/memory, core/kernel/nvm/instructions/system, core/kernel/nvm/syscalls,
+            core/kernel/rvemu/rvemu, core/kernel/rvemu/cpu, core/kernel/rvemu/memory, core/kernel/rvemu/host,
+            core/kernel/rvemu/ecall, core/kernel/rvemu/ecall_services, core/kernel/rvemu/elf_loader,
+            core/kernel/rvemu/process, core/kernel/rvemu/sched,
 
             core/crypto/chacha20, core/crypto/chacha20_rng]
       cmds:
@@ -131,47 +131,47 @@ targets:
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  core/kernel/nvm/nvm:
+  core/kernel/rvemu/rvemu:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  core/kernel/nvm/instructions/arithmetic:
+  core/kernel/rvemu/cpu:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  core/kernel/nvm/instructions/stack:
+  core/kernel/rvemu/memory:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  core/kernel/nvm/instructions/flowcontrol:
+  core/kernel/rvemu/host:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  core/kernel/nvm/instructions/bitwise:
+  core/kernel/rvemu/ecall:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  core/kernel/nvm/instructions/memory:
+  core/kernel/rvemu/ecall_services:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  core/kernel/nvm/instructions/system:
+  core/kernel/rvemu/elf_loader:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  core/kernel/nvm/syscalls:
+  core/kernel/rvemu/process:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
-  core/kernel/nvm/caps:
+  core/kernel/rvemu/sched:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
@@ -370,14 +370,6 @@ targets:
     deps: []
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
-
-  userspace:
-    deps: []
-    cmds:
-      - "echo \n"
-      - "echo [USERSPACE BUILDING]"
-      - "cd rootfs/usr/src/ && chorus all && cd ../../.."
-      - "echo \n"
 
   iso:
     deps: []

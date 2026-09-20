@@ -6,7 +6,7 @@
 #include <core/arch/cpuid.h>
 #include <core/kernel/kstd.h>
 #include <core/kernel/mem.h>
-#include <core/kernel/nvm/nvm.h>
+#include <core/kernel/rvemu/rvemu.h>
 #include <core/drivers/timer.h>
 #include <stdint.h>
 #include <string.h>
@@ -34,7 +34,7 @@ typedef struct {
 } procfs_args_t;
 
 static procfs_entry_t procfs_entries[MAX_PROCFS_ENTRIES];
-static procfs_args_t procfs_args[MAX_PROCESSES];
+static procfs_args_t procfs_args[RV64_MAX_PROCESSES];
 
 static procfs_entry_t* procfs_find_entry(const char* name) {
     for (int i = 0; i < MAX_PROCFS_ENTRIES; i++) {
@@ -468,176 +468,85 @@ void cpuinfo_init(void) {
     strcat_safe(buf, "\n", remaining);
 }
 
-static vfs_ssize_t procfs_bytecode_read(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos) {
-    nvm_process_t* process = (nvm_process_t*)file->dev_data;
+static vfs_ssize_t procfs_registers_read(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos) {
+    rv64_process_t* process = (rv64_process_t*)file->dev_data;
     if (process == NULL) return -1;
     
-    char bytecode_buf[8192];
-    int bytecode_initialized = 0;
+    char regs_buf[2048];
+    char* ptr = regs_buf;
+    size_t remaining = sizeof(regs_buf);
     
-    if (!bytecode_initialized) {
-        char *ptr = bytecode_buf;
-        size_t remaining = sizeof(bytecode_buf);
+    strcpy_safe(ptr, "General purpose registers (hex):\n", remaining);
+    ptr += strlen(ptr);
+    remaining = sizeof(regs_buf) - (ptr - regs_buf);
+    
+    for (int i = 0; i <= 31 && remaining > 0; i++) {
+        char hex_str[20];
+        char index_str[8];
+        char line[32];
         
-        strcpy_safe(ptr, "Bytecode (hex):\n", remaining);
-        ptr += strlen(ptr);
-        remaining = sizeof(bytecode_buf) - (ptr - bytecode_buf);
+        itoa((int)process->cpu.registers[i], hex_str, 16);
+        itoa(i, index_str, 10);
         
-        char ascii_part[17] = {0};
-        int ascii_idx = 0;
+        strcpy_safe(line, "x", sizeof(line));
+        strcat_safe(line, index_str, sizeof(line));
+        strcat_safe(line, "=0x", sizeof(line));
+        strcat_safe(line, hex_str, sizeof(line));
+        strcat_safe(line, "\n", sizeof(line));
         
-        for (size_t i = 0; i < process->size; i++) {
-            if (i > 0 && i % 16 == 0) {
-                strcat_safe(ptr, "  |", remaining);
-                for (int j = 0; j < 16; j++) {
-                    char c = ascii_part[j];
-                    if (c >= 32 && c <= 126) {
-                        char tmp[2] = {c, '\0'};
-                        strcat_safe(ptr, tmp, remaining);
-                    } else {
-                        strcat_safe(ptr, ".", remaining);
-                    }
-                }
-                strcat_safe(ptr, "|\n", remaining);
-                size_t written = strlen(ptr) - (ptr - bytecode_buf);
-                ptr = bytecode_buf + written;
-                remaining = sizeof(bytecode_buf) - written;
-                remaining = sizeof(bytecode_buf) - (ptr - bytecode_buf);
-                
-                memset(ascii_part, 0, sizeof(ascii_part));
-                ascii_idx = 0;
-            }
-            else if (i > 0 && i % 8 == 0) {
-                strcat_safe(ptr, " ", remaining);
-                ptr += 1;
-                remaining -= 1;
-            }
-            
-            uint8_t byte = process->bytecode[i];
-
-            char hex_byte[3];
-            const char* hex_chars = "0123456789abcdef";
-            hex_byte[0] = hex_chars[(byte >> 4) & 0x0F];
-            hex_byte[1] = hex_chars[byte & 0x0F];
-            hex_byte[2] = '\0';
-            
-            strcat_safe(ptr, hex_byte, remaining);
-            strcat_safe(ptr, " ", remaining);
-            ptr += 3;
-            remaining -= 3;
-            
-            ascii_part[ascii_idx++] = byte;
-            
-            if (remaining <= 50) {
-                if (ascii_idx > 0) {
-                    while (i % 16 != 15 && i < process->size - 1) {
-                        strcat_safe(ptr, "   ", remaining);
-                        i++;
-                        ptr += 3;
-                        remaining -= 3;
-                    }
-                    strcat_safe(ptr, "  |", remaining);
-                    for (int j = 0; j < ascii_idx; j++) {
-                        char c = ascii_part[j];
-                        if (c >= 32 && c <= 126) {
-                            char tmp[2] = {c, '\0'};
-                            strcat_safe(ptr, tmp, remaining);
-                        } else {
-                            strcat_safe(ptr, ".", remaining);
-                        }
-                    }
-                    strcat_safe(ptr, "|\n", remaining);
-                }
-                strcat_safe(ptr, "\n...[truncated]", remaining);
-                break;
-            }
-        }
-
-        if (ascii_idx > 0) {
-            while (ascii_idx < 16) {
-                strcat_safe(ptr, "   ", remaining);
-                ptr += 3;
-                remaining -= 3;
-                ascii_idx++;
-            }
-            strcat_safe(ptr, "  |", remaining);
-            for (int j = 0; j < 16 && ascii_part[j] != 0; j++) {
-                char c = ascii_part[j];
-                if (c >= 32 && c <= 126) {
-                    char tmp[2] = {c, '\0'};
-                    strcat_safe(ptr, tmp, remaining);
-                } else {
-                    strcat_safe(ptr, ".", remaining);
-                }
-            }
-            strcat_safe(ptr, "|\n", remaining);
-        }
-        
-        strcat_safe(ptr, "\nBytecode size: ", remaining);
-        char size_str[16];
-        itoa(process->size, size_str, 10);
-        strcat_safe(ptr, size_str, remaining);
-        strcat_safe(ptr, " bytes\n", remaining);
-        
-        bytecode_initialized = 1;
+        strcat_safe(ptr, line, remaining);
+        ptr += strlen(line);
+        remaining = sizeof(regs_buf) - (ptr - regs_buf);
     }
     
-    size_t len = strlen(bytecode_buf);
+    if (remaining > 0) {
+        *ptr = '\0';
+    } else {
+        regs_buf[sizeof(regs_buf) - 1] = '\0';
+    }
+    
+    size_t len = strlen(regs_buf);
     if (*pos >= len) return 0;
     
-    size_t remaining = len - *pos;
-    size_t to_copy = (remaining < count) ? remaining : count;
+    size_t remaining_bytes = len - *pos;
+    size_t to_copy = (remaining_bytes < count) ? remaining_bytes : count;
     
-    memcpy(buf, bytecode_buf + *pos, to_copy);
+    memcpy(buf, regs_buf + *pos, to_copy);
     *pos += to_copy;
     
     return to_copy;
 }
 
 static vfs_ssize_t procfs_status_read(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos) {
-    char status_buf[512];
-    int status_initialized = 0;
+    rv64_process_t* process = (rv64_process_t*)file->dev_data;
+    if (process == NULL) return -1;
     
-    if (!status_initialized) {
-        nvm_process_t* process = (nvm_process_t*)file->dev_data;
-        if (process == NULL) return -1;
-        
-        char pid_str[16];
-        char sp_str[16];
-        char ip_str[16];
-        char size_str[16];
-        char exit_str[16];
-        
-        itoa(process->pid, pid_str, 10);
-        itoa(process->sp, sp_str, 10);
-        itoa(process->ip, ip_str, 10);
-        itoa(process->size, size_str, 10);
-        itoa(process->exit_code, exit_str, 10);
-        
-        strcpy_safe(status_buf, "pid: ", sizeof(status_buf));
-        strcat_safe(status_buf, pid_str, sizeof(status_buf));
-        strcat_safe(status_buf, "\nactive: ", sizeof(status_buf));
-        strcat_safe(status_buf, process->active ? "yes" : "no", sizeof(status_buf));
-        strcat_safe(status_buf, "\nblocked: ", sizeof(status_buf));
-        strcat_safe(status_buf, process->blocked ? "yes" : "no", sizeof(status_buf));
-        strcat_safe(status_buf, "\nsp: ", sizeof(status_buf));
-        strcat_safe(status_buf, sp_str, sizeof(status_buf));
-        strcat_safe(status_buf, "\nip: ", sizeof(status_buf));
-        strcat_safe(status_buf, ip_str, sizeof(status_buf));
-        strcat_safe(status_buf, "\nsize: ", sizeof(status_buf));
-        strcat_safe(status_buf, size_str, sizeof(status_buf));
-        strcat_safe(status_buf, "\nexit_code: ", sizeof(status_buf));
-        strcat_safe(status_buf, exit_str, sizeof(status_buf));
-        strcat_safe(status_buf, "\nwakeup_reason: ", sizeof(status_buf));
-        itoa(process->wakeup_reason, pid_str, 10);
-        strcat_safe(status_buf, pid_str, sizeof(status_buf));
-        strcat_safe(status_buf, "\ncaps_count: ", sizeof(status_buf));
-        itoa(process->caps_count, pid_str, 10);
-        strcat_safe(status_buf, pid_str, sizeof(status_buf));
-        strcat_safe(status_buf, "\n", sizeof(status_buf));
-        
-        status_initialized = 1;
-    }
+    char status_buf[512];
+    char pid_str[16];
+    char pc_str[16];
+    char sp_str[16];
+    char size_str[16];
+    char exit_str[16];
+    
+    itoa((int)process->pid, pid_str, 10);
+    itoa((int)process->cpu.pc, pc_str, 16);
+    itoa((int)process->cpu.registers[2], sp_str, 16);
+    itoa((int)process->memory.size, size_str, 10);
+    itoa(process->exit_code, exit_str, 10);
+    
+    strcpy_safe(status_buf, "pid: ", sizeof(status_buf));
+    strcat_safe(status_buf, pid_str, sizeof(status_buf));
+    strcat_safe(status_buf, "\nactive: ", sizeof(status_buf));
+    strcat_safe(status_buf, (process->cpu.halted == 0) ? "yes" : "no", sizeof(status_buf));
+    strcat_safe(status_buf, "\npc (hex): ", sizeof(status_buf));
+    strcat_safe(status_buf, pc_str, sizeof(status_buf));
+    strcat_safe(status_buf, "\nsp (hex): ", sizeof(status_buf));
+    strcat_safe(status_buf, sp_str, sizeof(status_buf));
+    strcat_safe(status_buf, "\nmemory size: ", sizeof(status_buf));
+    strcat_safe(status_buf, size_str, sizeof(status_buf));
+    strcat_safe(status_buf, "\nexit_code: ", sizeof(status_buf));
+    strcat_safe(status_buf, exit_str, sizeof(status_buf));
+    strcat_safe(status_buf, "\n", sizeof(status_buf));
     
     size_t len = strlen(status_buf);
     if (*pos >= len) return 0;
@@ -651,73 +560,13 @@ static vfs_ssize_t procfs_status_read(vfs_file_t* file, void* buf, size_t count,
     return to_copy;
 }
 
-static vfs_ssize_t procfs_stack_read(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos) {
-    nvm_process_t* process = (nvm_process_t*)file->dev_data;
-    if (process == NULL) return -1;
-    
-    char stack_buf[4096];
-    int stack_initialized = 0;
-    
-    if (!stack_initialized) {
-        char *ptr = stack_buf;
-        size_t remaining = sizeof(stack_buf);
-        
-        strcpy_safe(ptr, "Stack dump (hex):\n", remaining);
-        ptr += strlen(ptr);
-        remaining = sizeof(stack_buf) - (ptr - stack_buf);
-        
-        for (int i = 0; i < process->sp; i++) {
-            if (i > 0 && i % 8 == 0) {
-                strcat_safe(ptr, "\n", remaining);
-                ptr += 1;
-                remaining--;
-            }
-            
-            char hex_str[9];
-            itoa(process->stack[i], hex_str, 16);
-
-            char formatted[11];
-            strcpy_safe(formatted, "0x", sizeof(formatted));
-
-            int len = strlen(hex_str);
-            for (int j = 0; j < 8 - len; j++) {
-                strcat_safe(formatted, "0", sizeof(formatted));
-            }
-            strcat_safe(formatted, hex_str, sizeof(formatted));
-            strcat_safe(formatted, " ", sizeof(formatted));
-            
-            strcat_safe(ptr, formatted, remaining);
-            ptr += strlen(formatted);
-            remaining = sizeof(stack_buf) - (ptr - stack_buf);
-            
-            if (remaining <= 20) {
-                break;
-            }
-        }
-        
-        strcat_safe(ptr, "\n", remaining);
-        stack_initialized = 1;
-    }
-    
-    size_t len = strlen(stack_buf);
-    if (*pos >= len) return 0;
-    
-    size_t remaining = len - *pos;
-    size_t to_copy = (remaining < count) ? remaining : count;
-    
-    memcpy(buf, stack_buf + *pos, to_copy);
-    *pos += to_copy;
-    
-    return to_copy;
-}
-
 static vfs_ssize_t procfs_args_read(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos) {
-    nvm_process_t* process = (nvm_process_t*)file->dev_data;
+    rv64_process_t* process = (rv64_process_t*)file->dev_data;
     if (process == NULL) return -1;
     
     procfs_args_t* args = NULL;
-    for (int i = 0; i < MAX_PROCESSES; i++) {
-        if (procfs_args[i].used && procfs_args[i].pid == process->pid) {
+    for (int i = 0; i < RV64_MAX_PROCESSES; i++) {
+        if (procfs_args[i].used && procfs_args[i].pid == (int)process->pid) {
             args = &procfs_args[i];
             break;
         }
@@ -760,11 +609,11 @@ static vfs_ssize_t procfs_args_read(vfs_file_t* file, void* buf, size_t count, v
 }
 
 static vfs_ssize_t procfs_pid_read(vfs_file_t* file, void* buf, size_t count, vfs_off_t* pos) {
-    nvm_process_t* process = (nvm_process_t*)file->dev_data;
+    rv64_process_t* process = (rv64_process_t*)file->dev_data;
     if (process == NULL) return -1;
 
     char pid_str[16];
-    itoa(process->pid, pid_str, 10);
+    itoa((int)process->pid, pid_str, 10);
 
     size_t len = strlen(pid_str);
     if (*pos >= (vfs_off_t)len) return 0;
@@ -912,7 +761,7 @@ vfs_ssize_t procfs_version(vfs_file_t* file, void* buf, size_t count, vfs_off_t*
 
 
 void procfs_set_args(int pid, char* argv[], int argc) {
-    for (int i = 0; i < MAX_PROCESSES; i++) {
+    for (int i = 0; i < RV64_MAX_PROCESSES; i++) {
         if (procfs_args[i].used && procfs_args[i].pid == pid) {
             for (int j = 0; j < procfs_args[i].argc; j++) {
                 if (procfs_args[i].args[j]) {
@@ -924,7 +773,7 @@ void procfs_set_args(int pid, char* argv[], int argc) {
         }
     }
     
-    for (int i = 0; i < MAX_PROCESSES; i++) {
+    for (int i = 0; i < RV64_MAX_PROCESSES; i++) {
         if (!procfs_args[i].used) {
             procfs_args[i].pid = pid;
             procfs_args[i].argc = argc;
@@ -942,7 +791,7 @@ void procfs_set_args(int pid, char* argv[], int argc) {
 }
 
 void procfs_clear_args(int pid) {
-    for (int i = 0; i < MAX_PROCESSES; i++) {
+    for (int i = 0; i < RV64_MAX_PROCESSES; i++) {
         if (procfs_args[i].used && procfs_args[i].pid == pid) {
             for (int j = 0; j < procfs_args[i].argc; j++) {
                 if (procfs_args[i].args[j]) {
@@ -968,12 +817,8 @@ void procfs_register(int pid, void* process_data) {
     procfs_add_entry(relpath, procfs_status_read, process_data, false);
 
     strcpy(relpath, pid_str);
-    strcat(relpath, "/stack");
-    procfs_add_entry(relpath, procfs_stack_read, process_data, false);
-
-    strcpy(relpath, pid_str);
-    strcat(relpath, "/bytecode");
-    procfs_add_entry(relpath, procfs_bytecode_read, process_data, false);
+    strcat(relpath, "/registers");
+    procfs_add_entry(relpath, procfs_registers_read, process_data, false);
 
     strcpy(relpath, pid_str);
     strcat(relpath, "/args");
@@ -995,11 +840,7 @@ void procfs_unregister(int pid) {
     procfs_remove_entry(relpath);
 
     strcpy(relpath, pid_str);
-    strcat(relpath, "/stack");
-    procfs_remove_entry(relpath);
-
-    strcpy(relpath, pid_str);
-    strcat(relpath, "/bytecode");
+    strcat(relpath, "/registers");
     procfs_remove_entry(relpath);
 
     strcpy(relpath, pid_str);
@@ -1020,7 +861,7 @@ void procfs_init(void) {
         procfs_entries[i].used = false;
     }
     
-    for (int i = 0; i < MAX_PROCESSES; i++) {
+    for (int i = 0; i < RV64_MAX_PROCESSES; i++) {
         procfs_args[i].used = false;
     }
 

@@ -4,7 +4,7 @@
 #include <core/kernel/kstd.h>
 #include <core/kernel/vge/fb.h>
 #include <core/arch/io.h>
-#include <core/kernel/nvm/nvm.h>
+#include <core/kernel/rvemu/rvemu.h>
 #include <stdbool.h>
 
 #define KEYBOARD_DATA_PORT    0x60
@@ -197,7 +197,7 @@ bool keyboard_has_char(void) {
 char keyboard_getchar(void) {    
     while (!keyboard_has_char()) {
         keyboard_poll();
-        nvm_scheduler_tick();
+        rvemu_tick();
     }
     return keyboard_buffer_pop();
 }
