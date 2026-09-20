@@ -371,8 +371,13 @@ targets:
     cmds:
       - "${CC} ${CFLAGS} ${@}.c -o ${OBJ_DIR}/${@}.o"
 
+  userspace:
+    deps: [prepare]
+    cmds:
+      - "make -C userspace"
+
   iso:
-    deps: []
+    deps: [userspace]
     cmds:
       - "cp limine/limine-bios-cd.bin ${BUILD_DIR}/boot/"
       - "xorriso -as mkisofs -quiet -iso-level 3 -o ${BUILD_DIR}/boot/rootfs.img rootfs/"

@@ -629,6 +629,7 @@ void cpu_reset(rv64_cpu_t *cpu, uint64_t entry_point, uint64_t stack_pointer) {
     cpu->pc = entry_point;
     cpu->halted = 0;
     cpu->trace_enabled = 0;
+    cpu->exit_code = 0;
     cpu->ecall_dispatcher = NULL;
     cpu->ecall_dispatcher_context = NULL;
 }

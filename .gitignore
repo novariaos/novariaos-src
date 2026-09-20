@@ -20,3 +20,8 @@ compile_commands.json
 
 # Tools
 tools/*
+
+# Userspace build artifacts
+/userspace/build/
+/userspace/nvlibc/*.o
+/userspace/nvlibc/*.a

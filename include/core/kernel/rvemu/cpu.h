@@ -16,6 +16,7 @@ struct rv64_cpu {
     uint64_t pc;
     int halted;
     int trace_enabled;
+    int64_t exit_code;
     ecall_dispatcher_fn ecall_dispatcher;
     void *ecall_dispatcher_context;
 };

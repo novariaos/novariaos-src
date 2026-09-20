@@ -15,6 +15,14 @@ static void ecall_service_tty_write(rv64_cpu_t *cpu, rv64_memory_t *memory, rv64
     cpu_write_register(cpu, 10, buffer_length);
 }
 
+static void ecall_service_exit(rv64_cpu_t *cpu, rv64_memory_t *memory, rv64_host_t *host) {
+    (void)memory;
+    (void)host;
+    cpu->exit_code = (int64_t)cpu_read_register(cpu, 10);
+    cpu->halted = 1;
+}
+
 void ecall_services_install(ecall_registry_t *registry) {
+    ecall_register(registry, RV64_ECALL_EXIT, ecall_service_exit);
     ecall_register(registry, RV64_ECALL_TTY_WRITE, ecall_service_tty_write);
 }

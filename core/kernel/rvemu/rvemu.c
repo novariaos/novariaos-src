@@ -87,7 +87,7 @@ int32_t rvemu_get_exit_code(uint64_t pid) {
     if (process == NULL) {
         return -1;
     }
-    return process->exit_code;
+    return process->cpu.exit_code;
 }
 
 int rvemu_reap_process(uint64_t pid) {
