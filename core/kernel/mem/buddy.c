@@ -331,9 +331,12 @@ void buddy_init(buddy_allocator_t* allocator, void* pool_start, size_t pool_size
     }
 
     if (allocator->max_blocks[max_order] > 0) {
-        clear_bit(allocator->free_area_bitmap[max_order], 0, allocator->max_blocks[max_order]);
-        allocator->free_area_size[max_order] = 1;
-        LOG_TRACE("buddy_init: marked block 0 in order max_order %u as free\n", max_order);
+        for (size_t index = 0; index < (size_t)allocator->max_blocks[max_order]; index++) {
+            allocator->free_area_bitmap[max_order][index / 32] &= ~(1U << (index % 32));
+        }
+        allocator->free_area_size[max_order] = (size_t)allocator->max_blocks[max_order];
+        LOG_TRACE("buddy_init: marked %zu blocks in order %u as free\n",
+                  allocator->free_area_size[max_order], max_order);
     }
 
     spinlock_release(&allocator->lock);

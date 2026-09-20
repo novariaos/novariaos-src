@@ -62,6 +62,12 @@ int rvemu_create_process_from_elf(const uint8_t *image, uint32_t size) {
 }
 
 void rvemu_tick(void) {
+    for (int index = 0; index < RV64_MAX_PROCESSES; index++) {
+        rv64_process_t *process = &processes[index];
+        if (process->active != 0 && process->cpu.halted != 0) {
+            rvemu_reap_process(process->pid);
+        }
+    }
     rv64_scheduler_tick(&rvemu_scheduler);
 }
 
