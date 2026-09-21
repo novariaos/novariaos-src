@@ -3,7 +3,7 @@ include rules.mk
 OUT := build
 ROOTFS_BIN := ../rootfs/bin
 
-PROGRAMS := hello calc pyramid
+PROGRAMS := hello calc pyramid cat
 
 BINS := $(addprefix $(OUT)/,$(addsuffix .bin,$(PROGRAMS)))
 
