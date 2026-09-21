@@ -62,8 +62,15 @@ static void ecall_service_spawn(rv64_cpu_t *cpu, rv64_memory_t *memory, rv64_hos
     }
 }
 
+static void ecall_service_sleep(rv64_cpu_t *cpu, rv64_memory_t *memory, rv64_host_t *host) {
+    uint64_t milliseconds = cpu_read_register(cpu, 10);
+    
+    sleep(milliseconds);
+}
+
 void ecall_services_install(ecall_registry_t *registry) {
     ecall_register(registry, RV64_ECALL_EXIT, ecall_service_exit);
     ecall_register(registry, RV64_ECALL_TTY_WRITE, ecall_service_tty_write);
     ecall_register(registry, RV64_ECALL_SPAWN, ecall_service_spawn);
+    ecall_register(registry, RV64_ECALL_SLEEP, ecall_service_sleep);
 }

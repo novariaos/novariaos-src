@@ -20,6 +20,10 @@ int puts(const char *s) {
     return (int)len;
 }
 
+void sleep(int milliseconds) {
+    nv_sleep(milliseconds);
+}
+
 int spawn(char* bin_path) {
     return nv_spawn(bin_path);
 }

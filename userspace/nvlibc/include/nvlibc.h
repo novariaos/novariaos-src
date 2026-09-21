@@ -8,6 +8,7 @@ typedef long ssize_t;
 
 void exit(int code);
 int spawn(char* bin_path);
+void sleep(int milliseconds);
 long write(const void *buf, size_t len);
 int putchar(char c);
 int puts(const char *s);
@@ -20,6 +21,7 @@ void *memmove(void *dst, const void *src, size_t n);
 
 void nv_exit(int code);
 int nv_spawn(char* bin_path);
+void nv_sleep(int milliseconds);
 long nv_tty_write(const void *buf, size_t len);
 
 #endif

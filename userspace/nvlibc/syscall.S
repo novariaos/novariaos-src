@@ -18,3 +18,9 @@ nv_spawn:
     li a7, 2
     ecall
     ret
+
+.globl nv_sleep
+nv_sleep:
+    li a7, 3
+    ecall
+    ret
