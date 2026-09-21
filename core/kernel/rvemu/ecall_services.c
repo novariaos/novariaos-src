@@ -87,8 +87,14 @@ static void ecall_service_open(rv64_cpu_t *cpu, rv64_memory_t *memory, rv64_host
 
     const char* path_str = (const char *)memory->ram + path;
     int fd = vfs_open(path_str, VFS_READ);
-    
+
     cpu_write_register(cpu, 10, (uint64_t)fd);     
+}
+
+static void ecall_service_close(rv64_cpu_t *cpu, rv64_memory_t *memory, rv64_host_t *host) {
+    uint64_t fd = cpu_read_register(cpu, 10);
+
+    vfs_close(fd);
 }
 
 void ecall_services_install(ecall_registry_t *registry) {
@@ -97,4 +103,5 @@ void ecall_services_install(ecall_registry_t *registry) {
     ecall_register(registry, RV64_ECALL_SPAWN, ecall_service_spawn);
     ecall_register(registry, RV64_ECALL_SLEEP, ecall_service_sleep);
     ecall_register(registry, RV64_ECALL_OPEN, ecall_service_open);
+    ecall_register(registry, RV64_ECALL_CLOSE, ecall_service_close);
 }

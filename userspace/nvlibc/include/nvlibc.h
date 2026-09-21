@@ -9,6 +9,7 @@ typedef long ssize_t;
 #define NULL ((void *)0)
 
 int  open(char *path);
+void close(int fd);
 long write(const void *buf, size_t len);
 int  putchar(char c);
 int  puts(const char *s);
@@ -30,6 +31,7 @@ void nv_exit(int code);
 int nv_spawn(char* bin_path);
 void nv_sleep(int milliseconds);
 int nv_open(char* path);
+void nv_close(int fd);
 long nv_tty_write(const void *buf, size_t len);
 
 #endif

@@ -30,3 +30,9 @@ nv_open:
     li a7, 16
     ecall
     ret
+
+.globl nv_close
+nv_close:
+    li a7, 17
+    ecall
+    ret

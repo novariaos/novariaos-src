@@ -31,3 +31,7 @@ int spawn(char* bin_path) {
 int open(char* path) {
     return nv_open(path);
 }
+
+void close(int fd) {
+    return nv_close(fd);
+}
