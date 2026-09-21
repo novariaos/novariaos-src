@@ -98,6 +98,7 @@ static void cmd_umount(int argc, char* argv[]) {
     }
 }
 
+/*
 static void cmd_cat(const char* args) {
     const char* path = args;
     while (*path == ' ') path++;
@@ -160,6 +161,7 @@ static void cmd_cat(const char* args) {
     }
     kprint("\n", 7);
 }
+*/
 
 static void cmd_ls(const char* args) {
     const char* path = args;
@@ -320,12 +322,6 @@ static void execute_command(const char* command) {
             cmd_ls(argv[1]);
         } else {
             cmd_ls("");
-        }
-    } else if (strcmp(argv[0], "cat") == 0) {
-        if (argc > 1) {
-            cmd_cat(argv[1]);
-        } else {
-            kprint("cat: Usage: cat <filename>\n", 7);
         }
     } else if (strcmp(argv[0], "cd") == 0) {
         shell_set_cwd(argv[1]);
