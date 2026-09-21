@@ -24,3 +24,9 @@ nv_sleep:
     li a7, 3
     ecall
     ret
+
+.globl nv_open
+nv_open:
+    li a7, 16
+    ecall
+    ret

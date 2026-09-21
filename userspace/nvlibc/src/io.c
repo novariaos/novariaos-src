@@ -27,3 +27,7 @@ void sleep(int milliseconds) {
 int spawn(char* bin_path) {
     return nv_spawn(bin_path);
 }
+
+int open(char* path) {
+    return nv_open(path);
+}
