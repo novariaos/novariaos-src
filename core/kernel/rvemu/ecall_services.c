@@ -64,8 +64,31 @@ static void ecall_service_spawn(rv64_cpu_t *cpu, rv64_memory_t *memory, rv64_hos
 
 static void ecall_service_sleep(rv64_cpu_t *cpu, rv64_memory_t *memory, rv64_host_t *host) {
     uint64_t milliseconds = cpu_read_register(cpu, 10);
-    
+
     sleep(milliseconds);
+}
+
+static void ecall_service_open(rv64_cpu_t *cpu, rv64_memory_t *memory, rv64_host_t *host) {
+    uint64_t path = cpu_read_register(cpu, 10);
+
+    if (!memory_contains(memory, path, 1)) {
+        cpu_write_register(cpu, 10, (uint64_t)-EBADF);
+        return;
+    }
+
+    size_t len = 0;
+    while (memory_contains(memory, path + len, 1) && memory->ram[path + len] != '\0')
+        len++;
+
+    if (!memory_contains(memory, path, len)) {
+        cpu_write_register(cpu, 10, (uint64_t)-ENAMETOOLONG);
+        return;
+    }
+
+    const char* path_str = (const char *)memory->ram + path;
+    int fd = vfs_open(path_str, VFS_READ);
+    
+    cpu_write_register(cpu, 10, (uint64_t)fd);     
 }
 
 void ecall_services_install(ecall_registry_t *registry) {
@@ -73,4 +96,5 @@ void ecall_services_install(ecall_registry_t *registry) {
     ecall_register(registry, RV64_ECALL_TTY_WRITE, ecall_service_tty_write);
     ecall_register(registry, RV64_ECALL_SPAWN, ecall_service_spawn);
     ecall_register(registry, RV64_ECALL_SLEEP, ecall_service_sleep);
+    ecall_register(registry, RV64_ECALL_OPEN, ecall_service_open);
 }

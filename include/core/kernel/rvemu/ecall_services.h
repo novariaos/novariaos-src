@@ -7,6 +7,7 @@
 #define RV64_ECALL_TTY_WRITE 1
 #define RV64_ECALL_SPAWN 2
 #define RV64_ECALL_SLEEP 3
+#define RV64_ECALL_OPEN 16
 
 void ecall_services_install(ecall_registry_t *registry);
 

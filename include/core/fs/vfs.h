@@ -50,6 +50,7 @@
 #define EISDIR  21
 #define EIO     5
 #define EMFILE  24
+#define ENAMETOOLONG 36 
 
 // File type bits for st_mode
 #define VFS_S_IFMT   0xF000
