@@ -19,6 +19,25 @@ static void ecall_service_tty_write(rv64_cpu_t *cpu, rv64_memory_t *memory, rv64
     cpu_write_register(cpu, 10, buffer_length);
 }
 
+static const char* guest_cstr(rv64_memory_t *memory, uint64_t addr, int *ok) {
+    *ok = 0;
+
+    if (!memory_contains(memory, addr, 1)) {
+        return NULL;
+    }
+
+    size_t len = 0;
+    while (memory_contains(memory, addr + len, 1) && memory->ram[addr + len] != '\0')
+        len++;
+
+    if (!memory_contains(memory, addr, len)) {
+        return NULL;
+    }
+
+    *ok = 1;
+    return (const char *)memory->ram + addr;
+}
+
 static void ecall_service_exit(rv64_cpu_t *cpu, rv64_memory_t *memory, rv64_host_t *host) {
     (void)memory;
     (void)host;
@@ -71,30 +90,70 @@ static void ecall_service_sleep(rv64_cpu_t *cpu, rv64_memory_t *memory, rv64_hos
 static void ecall_service_open(rv64_cpu_t *cpu, rv64_memory_t *memory, rv64_host_t *host) {
     uint64_t path = cpu_read_register(cpu, 10);
 
-    if (!memory_contains(memory, path, 1)) {
+    int ok = 0;
+    const char* path_str = guest_cstr(memory, path, &ok);
+    if (!ok) {
         cpu_write_register(cpu, 10, (uint64_t)-EBADF);
         return;
     }
 
-    size_t len = 0;
-    while (memory_contains(memory, path + len, 1) && memory->ram[path + len] != '\0')
-        len++;
-
-    if (!memory_contains(memory, path, len)) {
-        cpu_write_register(cpu, 10, (uint64_t)-ENAMETOOLONG);
-        return;
-    }
-
-    const char* path_str = (const char *)memory->ram + path;
     int fd = vfs_open(path_str, VFS_READ);
 
-    cpu_write_register(cpu, 10, (uint64_t)fd);     
+    cpu_write_register(cpu, 10, (uint64_t)fd);
 }
 
 static void ecall_service_close(rv64_cpu_t *cpu, rv64_memory_t *memory, rv64_host_t *host) {
     uint64_t fd = cpu_read_register(cpu, 10);
 
     vfs_close(fd);
+}
+
+static void ecall_service_read(rv64_cpu_t *cpu, rv64_memory_t *memory, rv64_host_t *host) {
+    uint64_t fd = cpu_read_register(cpu, 10);
+    uint64_t buf = cpu_read_register(cpu, 11);
+    uint64_t len = cpu_read_register(cpu, 12);
+
+    if (!memory_contains(memory, buf, len)) {
+        cpu_write_register(cpu, 10, (uint64_t)-EINVAL);
+        return;
+    }
+
+    vfs_ssize_t result = vfs_readfd((int)fd, memory->ram + buf, (size_t)len);
+    cpu_write_register(cpu, 10, (uint64_t)result);
+}
+
+static void ecall_service_write(rv64_cpu_t *cpu, rv64_memory_t *memory, rv64_host_t *host) {
+    uint64_t fd = cpu_read_register(cpu, 10);
+    uint64_t buf = cpu_read_register(cpu, 11);
+    uint64_t len = cpu_read_register(cpu, 12);
+
+    if (!memory_contains(memory, buf, len)) {
+        cpu_write_register(cpu, 10, (uint64_t)-EINVAL);
+        return;
+    }
+
+    if (fd == 1 || fd == 2) {
+        host->write_output(memory->ram + buf, len, host->context);
+        cpu_write_register(cpu, 10, len);
+        return;
+    }
+
+    vfs_ssize_t result = vfs_writefd((int)fd, memory->ram + buf, (size_t)len);
+    cpu_write_register(cpu, 10, (uint64_t)result);
+}
+
+static void ecall_service_mkdir(rv64_cpu_t *cpu, rv64_memory_t *memory, rv64_host_t *host) {
+    uint64_t path = cpu_read_register(cpu, 10);
+
+    int ok = 0;
+    const char* path_str = guest_cstr(memory, path, &ok);
+    if (!ok) {
+        cpu_write_register(cpu, 10, (uint64_t)-EINVAL);
+        return;
+    }
+
+    int result = vfs_mkdir(path_str);
+    cpu_write_register(cpu, 10, (uint64_t)result);
 }
 
 void ecall_services_install(ecall_registry_t *registry) {
@@ -104,4 +163,7 @@ void ecall_services_install(ecall_registry_t *registry) {
     ecall_register(registry, RV64_ECALL_SLEEP, ecall_service_sleep);
     ecall_register(registry, RV64_ECALL_OPEN, ecall_service_open);
     ecall_register(registry, RV64_ECALL_CLOSE, ecall_service_close);
+    ecall_register(registry, RV64_ECALL_READ, ecall_service_read);
+    ecall_register(registry, RV64_ECALL_WRITE, ecall_service_write);
+    ecall_register(registry, RV64_ECALL_MKDIR, ecall_service_mkdir);
 }

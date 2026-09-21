@@ -1,4 +1,5 @@
 #include <core/kernel/rvemu/sched.h>
+#include <core/kernel/rvemu/rvemu.h>
 
 void rv64_scheduler_init(rv64_scheduler_t *scheduler, uint64_t instructions_per_slice) {
     for (int index = 0; index < RV64_SCHEDULER_MAX_PROCESSES; index++) {
@@ -78,6 +79,7 @@ void rv64_scheduler_tick(rv64_scheduler_t *scheduler) {
 
     scheduler->current_index = picked;
     rv64_process_t *process = scheduler->processes[picked];
+    current_process = (int)process->pid;
     for (uint64_t executed = 0; executed < scheduler->instructions_per_slice; executed++) {
         rv64_cpu_t *cpu = &process->cpu;
         if (cpu->halted) {
