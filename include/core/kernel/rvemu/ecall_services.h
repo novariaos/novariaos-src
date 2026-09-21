@@ -5,6 +5,7 @@
 
 #define RV64_ECALL_EXIT 0
 #define RV64_ECALL_TTY_WRITE 1
+#define RV64_ECALL_SPAWN 2
 
 void ecall_services_install(ecall_registry_t *registry);
 

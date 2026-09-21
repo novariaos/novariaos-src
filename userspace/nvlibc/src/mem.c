@@ -1,6 +1,6 @@
 #include <nvlibc.h>
 
-void *nv_memset(void *dst, int c, size_t n) {
+void *memset(void *dst, int c, size_t n) {
     unsigned char *p = (unsigned char *)dst;
     for (size_t i = 0; i < n; i++) {
         p[i] = (unsigned char)c;
@@ -8,7 +8,7 @@ void *nv_memset(void *dst, int c, size_t n) {
     return dst;
 }
 
-void *nv_memcpy(void *dst, const void *src, size_t n) {
+void *memcpy(void *dst, const void *src, size_t n) {
     unsigned char *d = (unsigned char *)dst;
     const unsigned char *s = (const unsigned char *)src;
     for (size_t i = 0; i < n; i++) {
@@ -17,7 +17,7 @@ void *nv_memcpy(void *dst, const void *src, size_t n) {
     return dst; 
 }
 
-void *nv_memmove(void *dst, const void *src, size_t n) {
+void *memmove(void *dst, const void *src, size_t n) {
     unsigned char *d = (unsigned char *)dst;
     const unsigned char *s = (const unsigned char *)src;
     if (d < s) {

@@ -1,21 +1,25 @@
 #include <nvlibc.h>
 
-long nv_write(const void *buf, size_t len) {
+long write(const void *buf, size_t len) {
     return nv_tty_write(buf, len);
 }
 
-int putc(char c) {
+int putchar(char c) {
     char byte = c;
-    if (nv_write(&byte, 1) != 1) {
+    if (write(&byte, 1) != 1) {
         return -1;
     }
     return 0;
 }
 
 int puts(const char *s) {
-    size_t len = nv_strlen(s);
-    if (nv_write(s, len) != (long)len) {
+    size_t len = strlen(s);
+    if (write(s, len) != (long)len) {
         return -1;
     }
     return (int)len;
+}
+
+int spawn(char* bin_path) {
+    return nv_spawn(bin_path);
 }

@@ -2,6 +2,8 @@
 
 #include <core/kernel/kstd.h>
 #include <core/kernel/tty.h>
+#include <core/drivers/timer.h>
+#include <core/arch/pause.h>
 #include <stdint.h>
 
 void reverse(char* str, int length) {
@@ -144,6 +146,17 @@ char* strstr(const char* haystack, const char* needle) {
     }
 
     return NULL;
+}
+
+void sleep(int milliseconds) {
+    if (milliseconds <= 0) {
+        return;
+    }
+
+    uint64_t start = timer_get_uptime();
+    while (timer_get_uptime() < start + (uint64_t)milliseconds) {
+        cpu_relax();
+    }
 }
 
 void* memmove(void *dest, const void *src, size_t n) {

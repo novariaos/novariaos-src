@@ -7,17 +7,19 @@ typedef long ssize_t;
 #define NULL ((void *)0)
 
 void exit(int code);
-long nv_write(const void *buf, size_t len);
-int putc(char c);
+int spawn(char* bin_path);
+long write(const void *buf, size_t len);
+int putchar(char c);
 int puts(const char *s);
 
-size_t nv_strlen(const char *s);
-int nv_strcmp(const char *a, const char *b);
-void *nv_memset(void *dst, int c, size_t n);
-void *nv_memcpy(void *dst, const void *src, size_t n);
-void *nv_memmove(void *dst, const void *src, size_t n);
+size_t strlen(const char *s);
+int strcmp(const char *a, const char *b);
+void *memset(void *dst, int c, size_t n);
+void *memcpy(void *dst, const void *src, size_t n);
+void *memmove(void *dst, const void *src, size_t n);
 
 void nv_exit(int code);
+int nv_spawn(char* bin_path);
 long nv_tty_write(const void *buf, size_t len);
 
 #endif

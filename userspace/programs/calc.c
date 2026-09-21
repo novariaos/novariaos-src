@@ -19,8 +19,8 @@ int main(void) {
     }
     puts("div: ");
     for (int i = idx - 1; i >= 0; i--) {
-        putc(num[i]);
+        putchar(num[i]);
     }
-    putc('\n');
+    putchar('\n');
     return mul + mod;
 }
