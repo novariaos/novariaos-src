@@ -36,3 +36,21 @@ nv_close:
     li a7, 17
     ecall
     ret
+
+.globl nv_read
+nv_read:
+    li a7, 18
+    ecall
+    ret
+
+.globl nv_write
+nv_write:
+    li a7, 19
+    ecall
+    ret
+
+.globl nv_mkdir
+nv_mkdir:
+    li a7, 20
+    ecall
+    ret

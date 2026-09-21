@@ -10,7 +10,9 @@ typedef long ssize_t;
 
 int  open(char *path);
 void close(int fd);
-long write(const void *buf, size_t len);
+long read(int fd, void *buf, size_t len);
+long write(int fd, const void *buf, size_t len);
+int  mkdir(const char *path);
 int  putchar(char c);
 int  puts(const char *s);
 void sleep(int milliseconds);
@@ -32,6 +34,9 @@ int nv_spawn(char* bin_path);
 void nv_sleep(int milliseconds);
 int nv_open(char* path);
 void nv_close(int fd);
+long nv_read(int fd, void *buf, size_t len);
+long nv_write(int fd, const void *buf, size_t len);
+int nv_mkdir(char* path);
 long nv_tty_write(const void *buf, size_t len);
 
 #endif

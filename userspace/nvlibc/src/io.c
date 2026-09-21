@@ -1,12 +1,16 @@
 #include <nvlibc.h>
 
-long write(const void *buf, size_t len) {
-    return nv_tty_write(buf, len);
+long read(int fd, void *buf, size_t len) {
+    return nv_read(fd, buf, len);
+}
+
+long write(int fd, const void *buf, size_t len) {
+    return nv_write(fd, buf, len);
 }
 
 int putchar(char c) {
     char byte = c;
-    if (write(&byte, 1) != 1) {
+    if (write(1, &byte, 1) != 1) {
         return -1;
     }
     return 0;
@@ -14,7 +18,7 @@ int putchar(char c) {
 
 int puts(const char *s) {
     size_t len = strlen(s);
-    if (write(s, len) != (long)len) {
+    if (write(1, s, len) != (long)len) {
         return -1;
     }
     return (int)len;
@@ -33,5 +37,10 @@ int open(char* path) {
 }
 
 void close(int fd) {
-    return nv_close(fd);
+    nv_close(fd);
+}
+
+int mkdir(const char* path) {
+    int result = nv_mkdir((char*)path);
+    return result < 0 ? result : 0;
 }

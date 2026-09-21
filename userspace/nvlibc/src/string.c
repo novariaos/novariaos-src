@@ -139,6 +139,7 @@ int vsnprintf(char *buf, size_t cap, const char *fmt, va_list ap) {
         } else if (c == 's') {
             s = va_arg(ap, const char *);
             if (s == 0) s = "(null)";
+            is_signed = -1;
         } else if (c == '%') {
             tmp[0] = '%';
             n = 1;
@@ -248,7 +249,7 @@ int printf(const char *fmt, ...) {
     va_end(ap);
     if (n < 0) return -1;
     size_t len = (n < (int)sizeof buf) ? (size_t)n : sizeof buf - 1;
-    if (write(buf, len) != (long)len) return -1;
+    if (write(1, buf, len) != (long)len) return -1;
     return n;
 }
 
